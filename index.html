@@ -786,7 +786,19 @@ const SEED=[
 let apartments, filtered=[], sortCol='idObra', sortDir=1, page=1, editMode=false;
 const PAGE_SIZE=50;
 let deleteSnapIdx=null;
-
+  
+async function loadFromGitHub(){
+  try{
+    const r=await fetch('data.json?t='+Date.now());
+    if(!r.ok)return false;
+    const backup=await r.json();
+    if(!backup.data)return false;
+    Object.entries(backup.data).forEach(([k,v])=>localStorage.setItem(k,v));
+    console.log('✅ Datos cargados desde data.json');
+    return true;
+  }catch(e){return false;}
+}
+  
 function loadData(){
   try{
     const saved=JSON.parse(localStorage.getItem('apt_data_v2')||'null');
@@ -2260,7 +2272,8 @@ function importBackup(event){
 // ─────────────────────────────────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────────────────────────────────
-loadData();
+loadFromGitHub().then(()=>{ loadData(); updateStats(); updateActHeaders(); applyFilters(); });
+// Remove the duplicate calls below if any
 // Apply T5 update 08-06-2026 ONLY on a clean install (no saved data)
 // Never overwrite existing user data
 localStorage.removeItem('t5_update_1506_applied');
