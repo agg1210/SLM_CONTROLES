@@ -1,0 +1,2285 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de Apartamentos v2</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0d0f14;--surface:#151820;--surface2:#1c2030;--border:#252a38;--text:#e8eaf0;--muted:#5a6180;--accent:#4f9cf9;--green:#22c55e;--yellow:#eab308;--orange:#f97316;--red:#ef4444;--teal:#14b8a6;--purple:#a855f7}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.header{background:#151820;border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:200}
+.header h1{font-size:1.2rem;font-weight:800;letter-spacing:-0.02em}
+.header p{font-size:0.7rem;color:var(--muted);font-family:'DM Mono',monospace}
+.clock{font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--accent);background:rgba(79,156,249,0.08);border:1px solid rgba(79,156,249,0.2);border-radius:6px;padding:5px 10px}
+.nav-tabs{display:flex;gap:0;border-bottom:1px solid var(--border)}
+.nav-tab{padding:12px 20px;font-size:0.8rem;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;font-family:'Syne',sans-serif}
+.nav-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.nav-tab:hover{color:var(--text)}
+.page{display:none;padding:20px 24px}
+.page.active{display:block}
+
+/* STATS */
+.stats-bar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.stat-chip{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:0.72rem;cursor:pointer;transition:border-color .15s}
+.stat-chip:hover{border-color:var(--accent)}
+.stat-chip .dot{width:8px;height:8px;border-radius:50%}
+.stat-chip .num{font-weight:700;font-size:1rem;font-family:'DM Mono',monospace}
+.stat-chip .lbl{color:var(--muted);font-size:0.68rem}
+
+/* TOOLBAR */
+.toolbar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+select,input[type=text],input[type=date]{background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:0.73rem;font-family:'Syne',sans-serif;outline:none;cursor:pointer}
+select:focus,input:focus{border-color:var(--accent)}
+.btn{border-radius:6px;padding:7px 14px;font-size:0.73rem;cursor:pointer;font-family:'Syne',sans-serif;transition:all .15s;font-weight:600;display:inline-flex;align-items:center;gap:6px;border:none}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--muted)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{opacity:.85}
+.btn-green{background:var(--green);color:#fff}
+.btn-green:hover{opacity:.85}
+.btn-red{background:var(--red);color:#fff}
+.btn-red:hover{opacity:.85}
+.btn-purple{background:var(--purple);color:#fff}
+.btn-purple:hover{opacity:.85}
+.btn-orange{background:var(--orange);color:#fff}
+.btn-orange:hover{opacity:.85}
+.search-wrap{position:relative}
+.search-wrap input{padding-left:26px;width:180px}
+.search-icon{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:0.7rem;color:var(--muted)}
+
+/* TABLE */
+.table-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:0.73rem}
+thead tr{background:var(--surface);position:sticky;top:0;z-index:5}
+th{padding:9px 10px;text-align:left;font-weight:700;font-size:0.65rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
+th:hover{color:var(--accent)}
+th.sort-asc::after{content:' ▲'}
+th.sort-desc::after{content:' ▼'}
+td{padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+tr.row-vencido td{background:rgba(239,68,68,.04)}
+tr.row-riesgo td{background:rgba(249,115,22,.04)}
+tr.row-edited td:first-child{border-left:3px solid var(--yellow)}
+
+/* EDITABLE CELLS */
+.cell-edit{background:transparent;border:1px solid transparent;color:var(--text);border-radius:4px;padding:2px 6px;font-size:0.73rem;font-family:'Syne',sans-serif;width:100%;min-width:80px;transition:border-color .12s}
+.cell-edit:hover{border-color:var(--border)}
+.cell-edit:focus{border-color:var(--accent);outline:none;background:rgba(79,156,249,.06)}
+select.cell-edit{cursor:pointer}
+.act-input{width:52px;text-align:center}
+
+/* BADGES */
+.apt-id{font-family:'DM Mono',monospace;font-weight:500;color:var(--accent);font-size:0.78rem}
+.torre-badge{display:inline-block;padding:2px 6px;border-radius:4px;font-family:'DM Mono',monospace;font-size:0.66rem;font-weight:600}
+.t1{background:rgba(79,156,249,.12);color:#4f9cf9}
+.t2{background:rgba(124,90,248,.12);color:#7c5af8}
+.t3{background:rgba(20,184,166,.12);color:#14b8a6}
+.t4{background:rgba(234,179,8,.12);color:#eab308}
+.t5{background:rgba(249,115,22,.12);color:#f97316}
+.obra-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:4px;font-size:0.66rem;font-weight:600}
+.obra-entregado{background:rgba(59,130,246,.12);color:#60a5fa}
+.obra-limpieza{background:rgba(168,85,247,.12);color:#c084fc}
+.obra-proceso{background:rgba(249,115,22,.12);color:#f97316}
+.obra-cliente{background:rgba(34,197,94,.12);color:#22c55e}
+.obra-extra1{background:rgba(20,184,166,.12);color:#14b8a6}
+.obra-extra2{background:rgba(232,121,249,.12);color:#e879f9}
+.ev-Extra1{background:rgba(20,184,166,.1);color:#14b8a6}
+.ev-Extra2{background:rgba(232,121,249,.1);color:#e879f9}
+.ev-Extra3{background:rgba(234,179,8,.1);color:#eab308}
+.ventas-chip{font-size:0.66rem;padding:2px 7px;border-radius:4px}
+.ev-Entregado{background:rgba(34,197,94,.1);color:#4ade80}
+.ev-Vendido{background:rgba(59,130,246,.1);color:#60a5fa}
+.ev-Disponible{background:rgba(90,97,128,.12);color:#8892b0}
+.progress-wrap{display:flex;align-items:center;gap:6px;min-width:100px}
+.progress-bg{flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;border-radius:3px}
+.progress-pct{font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--muted);min-width:28px}
+.act-cell{width:24px;height:20px;display:inline-flex;align-items:center;justify-content:center;border-radius:3px;font-size:0.63rem;font-family:'DM Mono',monospace;font-weight:600}
+.ac-done{background:rgba(34,197,94,.15);color:var(--green)}
+.ac-p75{background:rgba(79,156,249,.12);color:var(--accent)}
+.ac-p50{background:rgba(234,179,8,.12);color:var(--yellow)}
+.ac-p25{background:rgba(249,115,22,.12);color:var(--orange)}
+.ac-none{background:rgba(90,97,128,.08);color:var(--muted)}
+.date-input{background:transparent;border:1px solid transparent;color:var(--text);border-radius:4px;padding:2px 6px;font-size:0.7rem;font-family:'DM Mono',monospace;width:118px;transition:border-color .12s}
+.date-input:hover{border-color:var(--border)}
+.date-input:focus{border-color:var(--accent);outline:none}
+.date-input.vencido{color:var(--red)}
+.date-input.riesgo{color:var(--orange)}
+.date-input.ok{color:var(--green)}
+.days-badge{font-family:'DM Mono',monospace;font-size:0.63rem;padding:2px 5px;border-radius:3px;font-weight:600}
+.db-vencido{background:rgba(239,68,68,.15);color:var(--red)}
+.db-riesgo{background:rgba(249,115,22,.15);color:var(--orange)}
+.db-ok{background:rgba(34,197,94,.1);color:var(--green)}
+
+/* PAGINATION */
+.pagination{display:flex;align-items:center;justify-content:space-between;padding:12px 0}
+.pag-info{font-size:0.7rem;color:var(--muted);font-family:'DM Mono',monospace}
+.pag-btns{display:flex;gap:4px}
+.pag-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 10px;font-size:0.7rem;cursor:pointer;font-family:'Syne',sans-serif;transition:all .12s}
+.pag-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.pag-btn:disabled{opacity:.35;cursor:default}
+.pag-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* EDIT MODE INDICATOR */
+.edit-mode-bar{background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.3);border-radius:8px;padding:10px 16px;margin-bottom:14px;display:none;align-items:center;gap:12px;font-size:0.76rem}
+.edit-mode-bar.show{display:flex}
+.edit-badge{background:var(--yellow);color:#000;border-radius:4px;padding:2px 8px;font-weight:700;font-size:0.68rem}
+
+/* SNAPSHOT MODULE */
+.snapshot-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
+.snapshot-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;transition:border-color .15s}
+.snapshot-card:hover{border-color:var(--accent)}
+.snapshot-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.snapshot-date{font-family:'DM Mono',monospace;font-size:0.78rem;color:var(--accent);font-weight:500}
+.snapshot-label{font-size:0.75rem;color:var(--text);font-weight:600}
+.snapshot-meta{font-size:0.68rem;color:var(--muted)}
+.snapshot-stats{display:flex;gap:12px;flex-wrap:wrap}
+.snap-stat{font-size:0.7rem;color:var(--muted)}
+.snap-stat strong{color:var(--text);font-family:'DM Mono',monospace}
+.snapshot-diff{display:flex;gap:8px;margin-top:8px;font-size:0.68rem;flex-wrap:wrap}
+.diff-chip{padding:2px 7px;border-radius:4px;font-weight:600}
+.diff-up{background:rgba(34,197,94,.1);color:var(--green)}
+.diff-dn{background:rgba(239,68,68,.1);color:var(--red)}
+.diff-eq{background:rgba(90,97,128,.1);color:var(--muted)}
+.snap-empty{text-align:center;padding:48px 20px;color:var(--muted)}
+.snap-empty .icon{font-size:2.5rem;margin-bottom:10px}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;display:none;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:24px;min-width:360px;max-width:480px;width:90%}
+.modal h3{font-size:1rem;font-weight:700;margin-bottom:16px}
+.modal label{display:block;font-size:0.73rem;color:var(--muted);margin-bottom:4px;margin-top:12px}
+.modal input,.modal textarea{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 10px;font-size:0.75rem;font-family:'Syne',sans-serif;outline:none}
+.modal input:focus,.modal textarea:focus{border-color:var(--accent)}
+.modal textarea{min-height:80px;resize:vertical}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+
+/* ALERTS PANEL */
+.alerts-panel{background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.25);border-radius:8px;margin-bottom:14px;display:none}
+.alerts-panel.show{display:block}
+.alerts-toggle{padding:9px 14px;font-size:0.75rem;font-weight:700;color:var(--red);display:flex;align-items:center;gap:7px;cursor:pointer}
+.alerts-body{padding:4px 14px 10px;display:none}
+.alerts-body.open{display:block}
+.alert-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(239,68,68,.1);font-size:0.7rem}
+.alert-row:last-child{border-bottom:none}
+.al-badge{font-family:'DM Mono',monospace;font-weight:600;padding:2px 7px;border-radius:3px;font-size:0.65rem}
+.al-vencido{background:rgba(239,68,68,.15);color:var(--red)}
+.al-riesgo{background:rgba(249,115,22,.15);color:var(--orange)}
+.al-gap-critico{background:rgba(239,68,68,.15);color:var(--red)}
+.al-gap-riesgo{background:rgba(234,179,8,.15);color:var(--yellow)}
+.gap-chip{font-family:'DM Mono',monospace;font-size:0.63rem;padding:2px 6px;border-radius:3px;font-weight:600;display:inline-block}
+.gap-ok{background:rgba(34,197,94,.1);color:var(--green)}
+.gap-critico{background:rgba(239,68,68,.15);color:var(--red)}
+.gap-riesgo{background:rgba(234,179,8,.15);color:var(--yellow)}
+
+/* DASHBOARD (Snapshots view) */
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px}
+.chart-card h4{font-size:0.75rem;font-weight:600;color:var(--muted);margin-bottom:12px}
+.spark-bar{display:flex;align-items:flex-end;gap:3px;height:60px}
+.spark-b{flex:1;background:var(--accent);border-radius:2px 2px 0 0;min-width:8px;opacity:.8;transition:height .3s}
+.spark-label{font-size:0.6rem;color:var(--muted);text-align:center;margin-top:3px}
+
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div style="flex:1;min-width:180px">
+    <h1>🏗 Control de Apartamentos</h1>
+    <p>Seguimiento en tiempo real · Torres 1–5</p>
+  </div>
+  <div id="clock" class="clock">—</div>
+</div>
+
+<div class="nav-tabs">
+  <button class="nav-tab active" onclick="showPage('seguimiento')">📋 Seguimiento</button>
+  <button class="nav-tab" onclick="showPage('snapshots')">📸 Snapshots</button>
+  <button class="nav-tab" onclick="showPage('torre5')" style="color:#f97316;border-bottom-color:transparent" id="tab-torre5">🏗 Torre 5</button>
+  <button class="nav-tab" onclick="showPage('config')">⚙️ Configuración</button>
+</div>
+
+<!-- ══ PAGE: SEGUIMIENTO ══════════════════════════════════════════════ -->
+<div id="page-seguimiento" class="page active">
+
+  <div class="stats-bar" id="statsBar"></div>
+
+  <div class="alerts-panel" id="alertsPanel">
+    <div class="alerts-toggle" onclick="document.getElementById('alertsBody').classList.toggle('open')">
+      ⚠️ <span id="alertsTitle">Alertas</span>
+      <span style="margin-left:auto;font-size:0.63rem;color:var(--muted)">ver</span>
+    </div>
+    <div class="alerts-body" id="alertsBody"></div>
+  </div>
+
+  <div class="edit-mode-bar" id="editBar">
+    <span class="edit-badge">MODO EDICIÓN</span>
+    <span style="color:var(--yellow)">Puedes editar celdas directamente. Los cambios se guardan automáticamente.</span>
+    <button class="btn btn-ghost" style="margin-left:auto" onclick="toggleEdit(false)">✕ Salir</button>
+  </div>
+
+  <div class="toolbar">
+    <span style="font-size:0.7rem;color:var(--muted);font-family:'DM Mono',monospace">Filtros:</span>
+    <select id="fTorre" onchange="applyFilters()">
+      <option value="">Todas las torres</option>
+      <option value="1">Torre 1</option><option value="2">Torre 2</option>
+      <option value="3">Torre 3</option><option value="4">Torre 4</option><option value="5">Torre 5</option>
+    </select>
+    <select id="fObra" onchange="applyFilters()"><option value="">Todos los estados</option></select>
+    <select id="fVentas" onchange="applyFilters()">
+      <option value="">Todas ventas</option>
+      <option value="Entregado">Entregado</option>
+      <option value="Vendido">Vendido</option>
+      <option value="Disponible">Disponible</option>
+    </select>
+    <select id="fAlerta" onchange="applyFilters()">
+      <option value="">Sin filtro alerta</option>
+      <option value="vencido">🔴 Vencidos</option>
+      <option value="riesgo">🟠 En riesgo</option>
+      <option value="con_fecha">Con fecha</option>
+      <option value="sin_fecha">Sin fecha</option>
+      <option value="gap_critico">🔴 Gap crítico (&lt;3 sem)</option>
+      <option value="gap_riesgo">🟡 Gap ajustado</option>
+    </select>
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="fSearch" placeholder="Buscar apto..." oninput="applyFilters()">
+    </div>
+    <button class="btn btn-ghost" onclick="resetFilters()">Limpiar</button>
+    <div style="margin-left:auto;display:flex;gap:6px">
+      <button class="btn btn-ghost" id="editBtn" onclick="toggleEdit(true)" title="Editar datos">✏️ Editar</button>
+      <button class="btn btn-orange" onclick="exportExcel()" title="Exportar Excel">⬇ Excel</button>
+      <button class="btn btn-red" onclick="exportPDF()" title="Exportar PDF">⬇ PDF</button>
+      <button class="btn btn-purple" onclick="openSnapshotModal()" title="Guardar snapshot">📸 Snapshot</button>
+      <button onclick="exportBackup()" title="Exportar todos tus datos" style="background:#0f172a;border:1.5px solid #14b8a6;color:#14b8a6;border-radius:6px;padding:7px 14px;font-size:.73rem;font-weight:700;cursor:pointer;font-family:'Syne',sans-serif">⬆ Backup</button>
+      <label title="Importar datos desde backup" style="background:#0f172a;border:1.5px solid #5a6180;color:#c8ccd8;border-radius:6px;padding:7px 14px;font-size:.73rem;font-weight:700;cursor:pointer;font-family:'Syne',sans-serif;display:inline-flex;align-items:center;gap:5px">⬇ Restaurar<input type="file" accept=".json" onchange="importBackup(event)" style="display:none"></label>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table id="mainTable">
+      <thead>
+        <tr>
+          <th onclick="sortBy('idObra')">ID Obra</th>
+          <th onclick="sortBy('torre')">T</th>
+          <th onclick="sortBy('apto')">Apto</th>
+          <th onclick="sortBy('tipo')">Tipo</th>
+          <th onclick="sortBy('estadoVentas')">Est. Ventas</th>
+          <th onclick="sortBy('estadoObra')">Est. Obra</th>
+          <th>Progreso</th>
+          <th id="act-th-0"></th><th id="act-th-1"></th><th id="act-th-2"></th><th id="act-th-3"></th><th id="act-th-4"></th><th id="act-th-5"></th><th id="act-th-6"></th><th id="act-th-7"></th><th id="act-th-8"></th><th id="act-th-9"></th><th id="act-th-10"></th><th id="act-th-11"></th>
+          <th onclick="sortBy('fechaEntregaComercial')">F.Entrega Comercial</th>
+          <th onclick="sortBy('fechaEntregaObra')">F.Entrega Obra</th>
+          <th title="Margen entre fecha obra y fecha comercial (mín. 21 días)">Gap ⚡</th>
+          <th>Días Obra</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+  <div id="emptyState" style="display:none;text-align:center;padding:50px;color:var(--muted)">
+    <div style="font-size:2rem">🔍</div><p style="margin-top:8px;font-size:.85rem">Sin resultados</p>
+  </div>
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<!-- ══ PAGE: SNAPSHOTS ══════════════════════════════════════════════ -->
+<div id="page-snapshots" class="page">
+  <div class="snapshot-header">
+    <div>
+      <h2 style="font-size:1rem;font-weight:700">📸 Snapshots semanales</h2>
+      <p style="font-size:0.72rem;color:var(--muted);margin-top:3px">Registro histórico del avance de obra</p>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-purple" onclick="openSnapshotModal()">+ Nuevo snapshot</button>
+      <button class="btn btn-ghost" onclick="exportSnapshotExcel()">⬇ Excel historial</button>
+    </div>
+  </div>
+
+  <div id="snapshotTrend" style="margin-bottom:16px"></div>
+  <div id="snapshotList"></div>
+</div>
+
+<!-- ══ PAGE: TORRE 5 ════════════════════════════════════════════════ -->
+<div id="page-torre5" class="page">
+  <!-- Header -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+    <div>
+      <h2 style="font-size:1.1rem;font-weight:800;color:#f97316;letter-spacing:-.02em">🏗 Torre 5 — Seguimiento intensivo</h2>
+      <p style="font-size:.72rem;color:var(--muted);margin-top:3px" id="t5-subtitle">Cargando...</p>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-orange" onclick="exportTorre5Excel()">⬇ Excel T5</button>
+      <button class="btn btn-red" onclick="exportTorre5PDF()">⬇ PDF T5</button>
+      <button class="btn btn-purple" onclick="openSnapshotModal()">📸 Snapshot</button>
+    </div>
+  </div>
+
+  <!-- KPIs Torre 5 -->
+  <div id="t5-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px"></div>
+
+  <!-- Progreso por piso (nivel) -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px">
+      <div style="font-size:.75rem;font-weight:700;color:var(--muted);margin-bottom:12px">Progreso por nivel (piso)</div>
+      <div id="t5-niveles"></div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px">
+      <div style="font-size:.75rem;font-weight:700;color:var(--muted);margin-bottom:12px">Avance por actividad</div>
+      <div id="t5-actividades"></div>
+    </div>
+  </div>
+
+  <!-- Alertas T5 -->
+  <div id="t5-alertas" style="margin-bottom:14px"></div>
+
+  <!-- Resumen vendidos T5 -->
+  <div id="t5-vendidos-section" style="margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:.82rem;font-weight:700;color:var(--text)">Avance acumulado — Apartamentos vendidos</span>
+        <span id="t5-vendidos-count" style="font-size:.68rem;background:rgba(79,156,249,.1);color:var(--accent);border:1px solid rgba(79,156,249,.2);border-radius:4px;padding:2px 8px;font-family:'DM Mono',monospace"></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:.68rem;color:var(--muted)">Ordenar:</span>
+        <select id="t5-v-sort" onchange="renderT5Vendidos()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 8px;font-size:.68rem">
+          <option value="apto">Apto</option>
+          <option value="prog_asc">Progreso ↑</option>
+          <option value="prog_desc">Progreso ↓</option>
+          <option value="piso">Por piso</option>
+        </select>
+        <button onclick="toggleVendidosCollapse()" id="t5-v-toggle" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:4px 10px;font-size:.68rem;cursor:pointer">▼ Colapsar</button>
+      </div>
+    </div>
+    <div id="t5-vendidos-body"></div>
+  </div>
+
+  <!-- Filtros T5 -->
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+    <select id="t5-fPiso" onchange="renderT5Table()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:.73rem">
+      <option value="">Todos los pisos</option>
+    </select>
+    <select id="t5-fVentas" onchange="renderT5Table()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:.73rem">
+      <option value="">Todas ventas</option>
+    </select>
+    <select id="t5-fObra" onchange="renderT5Table()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:.73rem">
+      <option value="">Todos estados</option>
+    </select>
+    <select id="t5-fAlerta" onchange="renderT5Table()" style="background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:.73rem">
+      <option value="">Sin filtro alerta</option>
+      <option value="gap">🔴 Gap crítico</option>
+      <option value="incompleto">⚠ Incompletos</option>
+      <option value="sin_fecha">Sin fecha obra</option>
+    </select>
+    <div style="position:relative">
+      <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:.7rem;color:var(--muted)">🔍</span>
+      <input type="text" id="t5-fSearch" oninput="renderT5Table()" placeholder="Buscar..." style="background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px 6px 26px;font-size:.73rem;width:160px">
+    </div>
+    <button class="btn btn-ghost" onclick="resetT5Filters()">Limpiar</button>
+    <button class="btn btn-ghost" id="t5-editBtn" onclick="toggleT5Edit(true)">✏️ Editar</button>
+  </div>
+
+  <div id="t5-edit-bar" style="display:none;background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.3);border-radius:8px;padding:9px 14px;margin-bottom:12px;font-size:.75rem;color:var(--yellow);align-items:center;gap:10px">
+    <span style="background:var(--yellow);color:#000;border-radius:4px;padding:2px 8px;font-weight:700;font-size:.68rem">MODO EDICIÓN</span>
+    Editando Torre 5 — los cambios se guardan automáticamente.
+    <button class="btn btn-ghost" style="margin-left:auto;font-size:.68rem;padding:3px 10px" onclick="toggleT5Edit(false)">✕ Salir</button>
+  </div>
+
+  <!-- Tabla T5 -->
+  <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border)">
+    <table id="t5-table" style="width:100%;border-collapse:collapse;font-size:.73rem">
+      <thead>
+        <tr style="background:var(--surface)">
+          <th style="padding:9px 10px;text-align:left;font-size:.65rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap">ID</th>
+          <th style="padding:9px 10px;text-align:left;font-size:.65rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)">Apto</th>
+          <th style="padding:9px 10px;text-align:left;font-size:.65rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)">Tipo</th>
+          <th style="padding:9px 10px;text-align:left;font-size:.65rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)">Ventas</th>
+          <th style="padding:9px 10px;text-align:left;font-size:.65rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)">Obra</th>
+          <th style="padding:9px 10px;text-align:left;font-size:.65rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);min-width:110px">Progreso</th>
+          <th id="t5-act-th-0" style="padding:9px 6px;text-align:center;font-size:.65rem;color:var(--muted);border-bottom:1px solid var(--border)"></th>
+          <th id="t5-act-th-1" style="padding:9px 6px;text-align:center;font-size:.65rem;color:var(--muted);border-bottom:1px solid var(--border)"></th>
+          <th id="t5-act-th-2" style="padding:9px 6px;text-align:center;font-size:.65rem;color:var(--muted);border-bottom:1px solid var(--border)"></th>
+          <th id="t5-act-th-3" style="padding:9px 6px;text-align:center;font-size:.65rem;color:var(--muted);border-bottom:1px solid var(--border)"></th>
+          <th id="t5-act-th-4" style="padding:9px 6px;text-align:center;font-size:.65rem;color:var(--muted);border-bottom:1px solid var(--border)"></th>
+          <th id="t5-act-th-5" style="padding:9px 6px;text-align:center;font-size:.65rem;color:var(--muted);border-bottom:1px solid var(--border)"></th>
+          <th id="t5-act-th-6" style="padding:9px 6px;text-align:center;font-size:.65rem;color:var(--muted);border-bottom:1px solid var(--border)"></th>
+          <th id="t5-act-th-7" style="padding:9px 6px;text-align:center;font-size:.65rem;color:var(--muted);border-bottom:1px solid var(--border)"></th>
+          <th id="t5-act-th-8" style="padding:9px 6px;text-align:center;font-size:.65rem;color:var(--muted);border-bottom:1px solid var(--border)"></th>
+          <th id="t5-act-th-9" style="padding:9px 6px;text-align:center;font-size:.65rem;color:var(--muted);border-bottom:1px solid var(--border)"></th>
+          <th id="t5-act-th-10" style="padding:9px 6px;text-align:center;font-size:.65rem;color:var(--muted);border-bottom:1px solid var(--border)"></th>
+          <th id="t5-act-th-11" style="padding:9px 6px;text-align:center;font-size:.65rem;color:var(--muted);border-bottom:1px solid var(--border)"></th>
+          <th style="padding:9px 10px;text-align:left;font-size:.65rem;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap">F.Comercial</th>
+          <th style="padding:9px 10px;text-align:left;font-size:.65rem;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap">F.Obra</th>
+          <th style="padding:9px 6px;text-align:center;font-size:.65rem;color:var(--muted);border-bottom:1px solid var(--border)" title="Gap obra→comercial">Gap</th>
+          <th style="padding:9px 6px;text-align:center;font-size:.65rem;color:var(--muted);border-bottom:1px solid var(--border)">Días</th>
+        </tr>
+      </thead>
+      <tbody id="t5-body"></tbody>
+    </table>
+  </div>
+  <div id="t5-empty" style="display:none;text-align:center;padding:40px;color:var(--muted)">
+    <div style="font-size:2rem">🔍</div><p style="margin-top:8px;font-size:.85rem">Sin resultados</p>
+  </div>
+</div>
+
+<!-- ══ PAGE: CONFIG ══════════════════════════════════════════════════ -->
+<div id="page-config" class="page">
+  <div style="max-width:720px">
+    <h2 style="font-size:1rem;font-weight:700;margin-bottom:4px">⚙️ Configuración de opciones</h2>
+    <p style="font-size:.75rem;color:var(--muted);margin-bottom:20px">Agrega, edita o elimina las opciones de los campos de Estado de Ventas y Estado de Obra. Los cambios se guardan automáticamente.</p>
+
+    <!-- Estado de Obra -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div>
+          <div style="font-size:.85rem;font-weight:700">Estado de Obra</div>
+          <div style="font-size:.7rem;color:var(--muted);margin-top:2px">Opciones disponibles en la columna "Est. Obra"</div>
+        </div>
+        <button onclick="addOptModal('obra')" style="background:var(--accent);border:none;color:#fff;border-radius:6px;padding:7px 14px;font-size:.73rem;font-weight:700;cursor:pointer;font-family:sans-serif">+ Agregar opción</button>
+      </div>
+      <div id="obra-opts-list"></div>
+    </div>
+
+    <!-- Estado de Ventas -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div>
+          <div style="font-size:.85rem;font-weight:700">Estado de Ventas</div>
+          <div style="font-size:.7rem;color:var(--muted);margin-top:2px">Opciones disponibles en la columna "Est. Ventas"</div>
+        </div>
+        <button onclick="addOptModal('ventas')" style="background:var(--accent);border:none;color:#fff;border-radius:6px;padding:7px 14px;font-size:.73rem;font-weight:700;cursor:pointer;font-family:sans-serif">+ Agregar opción</button>
+      </div>
+      <div id="ventas-opts-list"></div>
+    </div>
+
+    <!-- Backup / Restore -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:16px">
+      <div style="margin-bottom:14px">
+        <div style="font-size:.85rem;font-weight:700">💾 Backup y restauración de datos</div>
+        <div style="font-size:.7rem;color:var(--muted);margin-top:2px">Exporta todos tus datos (apartamentos, fechas, snapshots, configuración) a un archivo JSON. Úsalo para pasar tus datos a otro equipo o recuperarlos si cambias de archivo.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px">
+          <div style="font-size:.78rem;font-weight:600;margin-bottom:6px">⬆ Exportar backup</div>
+          <div style="font-size:.7rem;color:var(--muted);margin-bottom:12px;line-height:1.5">Descarga un archivo <code style="background:var(--border);padding:1px 5px;border-radius:3px;font-size:.68rem">.json</code> con todos tus datos actuales. Guárdalo en un lugar seguro.</div>
+          <button onclick="exportBackup()" style="background:var(--teal);border:none;color:#fff;border-radius:6px;padding:8px 16px;font-size:.75rem;font-weight:700;cursor:pointer;font-family:'Syne',sans-serif;width:100%">⬆ Descargar backup</button>
+          <div id="backup-info" style="font-size:.65rem;color:var(--muted);margin-top:8px;text-align:center"></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px">
+          <div style="font-size:.78rem;font-weight:600;margin-bottom:6px">⬇ Restaurar backup</div>
+          <div style="font-size:.7rem;color:var(--muted);margin-bottom:12px;line-height:1.5">Carga un archivo de backup <code style="background:var(--border);padding:1px 5px;border-radius:3px;font-size:.68rem">.json</code> para restaurar todos tus datos. <strong style="color:var(--orange)">Esto reemplazará los datos actuales.</strong></div>
+          <label style="background:var(--surface);border:1.5px solid var(--border);color:var(--text);border-radius:6px;padding:8px 16px;font-size:.75rem;font-weight:700;cursor:pointer;font-family:'Syne',sans-serif;display:block;text-align:center">
+            ⬇ Seleccionar archivo .json
+            <input type="file" accept=".json" onchange="importBackup(event)" style="display:none">
+          </label>
+          <div id="restore-info" style="font-size:.65rem;color:var(--muted);margin-top:8px;text-align:center"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actividades -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div>
+          <div style="font-size:.85rem;font-weight:700">Actividades de obra</div>
+          <div style="font-size:.7rem;color:var(--muted);margin-top:2px">Nombres de las columnas de actividad (PI, AZ, PU...)</div>
+        </div>
+      </div>
+      <div id="acts-opts-list"></div>
+      <p style="font-size:.68rem;color:var(--muted);margin-top:10px">Los valores (0–1) de cada actividad se mantienen al renombrar.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: ADD/EDIT OPTION ════════════════════════════════════════ -->
+<div class="modal-overlay" id="optModal">
+  <div class="modal">
+    <h3 id="optModalTitle">Agregar opción</h3>
+    <label>Nombre de la opción</label>
+    <input type="text" id="optInput" placeholder="ej: Entregado a cliente">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="document.getElementById('optModal').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveOpt()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: SNAPSHOT ══════════════════════════════════════════════ -->
+<div class="modal-overlay" id="snapModal">
+  <div class="modal">
+    <h3>📸 Guardar snapshot</h3>
+    <label>Semana / Fecha</label>
+    <input type="date" id="snapDate">
+    <label>Etiqueta (ej: Semana 23, Cierre mensual)</label>
+    <input type="text" id="snapLabel" placeholder="Semana 23">
+    <label>Notas / Observaciones</label>
+    <textarea id="snapNotes" placeholder="Avances relevantes, bloqueos, próximos pasos..."></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-purple" onclick="saveSnapshot()">Guardar snapshot</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: DELETE SNAPSHOT ══════════════════════════════════════ -->
+<div class="modal-overlay" id="delModal">
+  <div class="modal">
+    <h3>¿Eliminar snapshot?</h3>
+    <p style="font-size:.8rem;color:var(--muted);margin-top:6px">Esta acción no se puede deshacer.</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="document.getElementById('delModal').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-red" onclick="confirmDelete()">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────
+// DATA
+// ─────────────────────────────────────────────────────────────────────
+let ACTS=(()=>{try{const v=JSON.parse(localStorage.getItem('apt_acts'));return(v&&v.length===12)?v:['Piso','Azulejo','Puertas','Zócalo','Textura','Cocinas','Closets','Artefactos','Pintura','Emplacado','Herrería','Limpieza'];}catch(e){return['Piso','Azulejo','Puertas','Zócalo','Textura','Cocinas','Closets','Artefactos','Pintura','Emplacado','Herrería','Limpieza'];}})();
+// ── Dynamic options (editable via Config panel) ──────────────────────
+const DEFAULT_VENTAS_OPTS=['Entregado','Vendido','Disponible'];
+const DEFAULT_OBRA_OPTS=['Entregado condominia','EN LIMPIEZA FINAL','EN PROCESO','Entregado a cliente'];
+function loadOpts(key,defaults){try{const v=JSON.parse(localStorage.getItem(key));return(v&&v.length)?v:defaults;}catch(e){return defaults;}}
+function saveOpts(key,arr){try{localStorage.setItem(key,JSON.stringify(arr));}catch(e){}}
+let VENTAS_OPTS=loadOpts('apt_ventas_opts',DEFAULT_VENTAS_OPTS);
+let OBRA_OPTS=loadOpts('apt_obra_opts',DEFAULT_OBRA_OPTS);
+
+const SEED=[
+  [1,'60A','T1-101',101,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'60A','T1-102',102,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'30A','T1-201',201,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'30A','T1-202',202,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'60A','T1-203',203,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'45A','T1-204',204,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'30A','T1-205',205,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'45A','T1-206',206,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'60A','T1-301',301,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'60A','T1-302',302,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'45A','T1-303',303,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'30A','T1-304',304,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'45A','T1-305',305,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'60A','T1-401',401,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'60A','T1-402',402,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'45A','T1-403',403,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'30A','T1-404',404,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'45A','T1-405',405,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'60A','T1-501',501,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'60A','T1-502',502,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'45A','T1-503',503,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'30A','T1-504',504,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'45A','T1-505',505,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'60A','T1-601',601,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'60A','T1-602',602,'Disponible','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'75A','T1-603',603,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'45A','T1-604',604,'Disponible','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'75A','T1-701',701,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'45A','T1-702',702,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'60A','T1-703',703,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'60A','T1-704',704,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'75A','T1-801',801,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'45A','T1-802',802,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'60A','T1-803',803,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,'60A','T1-804',804,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'60A','T2-101',101,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'60A','T2-102',102,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'60A','T2-201',201,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'30A','T2-202',202,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'30A','T2-203',203,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'45A','T2-204',204,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'30A','T2-205',205,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'45A','T2-206',206,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'45A','T2-301',301,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'30A','T2-302',302,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'45A','T2-303',303,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'45A','T2-304',304,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'30A','T2-305',305,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'45A','T2-306',306,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'60A','T2-401',401,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'60A','T2-402',402,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'45A','T2-403',403,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'30A','T2-404',404,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'45A','T2-405',405,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'30A','T2-501',501,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'30A','T2-502',502,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'30A','T2-503',503,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'30A','T2-504',504,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'45A','T2-505',505,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'30A','T2-506',506,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'45A','T2-507',507,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'60A','T2-601',601,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'60A','T2-602',602,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'45A','T2-603',603,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'30A','T2-604',604,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'45A','T2-605',605,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'75A','T2-701',701,'Entregado','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'45A','T2-702',702,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'60A','T2-703',703,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [2,'60A','T2-704',704,'Vendido','Entregado condominia',1,1,1,1,1,1,1,1,1,1,1,1],
+  [3,'45A','T3-101',101,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'30A','T3-102',102,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-103',103,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-201',201,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'30A','T3-202',202,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-203',203,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-204',204,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'30A','T3-205',205,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-206',206,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-301',301,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'30A','T3-302',302,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-303',303,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-304',304,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'30A','T3-305',305,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-306',306,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-401',401,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'30A','T3-402',402,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-403',403,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-404',404,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'30A','T3-405',405,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-406',406,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-501',501,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'30A','T3-502',502,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-503',503,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-504',504,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'30A','T3-505',505,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-506',506,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'60A','T3-601',601,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'60A','T3-602',602,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-603',603,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'30A','T3-604',604,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-605',605,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'60A','T3-701',701,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'60A','T3-702',702,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-703',703,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'30A','T3-704',704,'Disponible','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-705',705,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'30A','T3-801',801,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'30A','T3-802',802,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [3,'45A','T3-803',803,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'45A','T4-201',201,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'30A','T4-202',202,'Disponible','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'45A','T4-203',203,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'45A','T4-204',204,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'30A','T4-205',205,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'45A','T4-206',206,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'45A','T4-301',301,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'30A','T4-302',302,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'45A','T4-303',303,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'45A','T4-304',304,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'30A','T4-305',305,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'45A','T4-306',306,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'45A','T4-401',401,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'30A','T4-402',402,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'45A','T4-403',403,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'45A','T4-404',404,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'30A','T4-405',405,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'45A','T4-406',406,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'45A','T4-501',501,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'30A','T4-502',502,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'45A','T4-503',503,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'45A','T4-504',504,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'30A','T4-505',505,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'45A','T4-506',506,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'60A','T4-601',601,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'60A','T4-602',602,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'45A','T4-603',603,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'30A','T4-604',604,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'45A','T4-605',605,'Entregado','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'75A','T4-701',701,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'45A','T4-702',702,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'60A','T4-703',703,'Disponible','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [4,'60A','T4-704',704,'Vendido','EN LIMPIEZA FINAL',1,1,1,1,1,1,1,1,1,1,1,0],
+  [5,'30A','T5-101',101,'Vendido','EN PROCESO',1,1,1,0,0.75,0.2,0.2,0.25,0,0,0,0],
+  [5,'50A','T5-102',102,'Vendido','EN PROCESO',0,0,0,0,0,0.2,0.2,0,0,0,0,0],
+  [5,'30A','T5-103',103,'Vendido','EN PROCESO',1,1,1,0.25,0.5,0.2,0.2,0.5,0,0,0,0],
+  [5,'50C','T5-104',104,'Vendido','EN PROCESO',1,1,1,0.25,0.5,0.2,0.2,0.25,0,0,0,0],
+  [5,'50A','T5-105',105,'Vendido','EN PROCESO',1,1,1,0,0.5,0.2,0.2,0.25,0,0,0,0],
+  [5,'50B','T5-106',106,'Vendido','EN PROCESO',1,1,1,0,0.5,0.2,0.2,0.25,0,0,0,0],
+  [5,'60A','T5-201',201,'Disponible','EN PROCESO',1,0,0,0,0.5,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-202',202,'Vendido','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-203',203,'Vendido','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-204',204,'Vendido','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-205',205,'Vendido','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-206',206,'Vendido','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'30A','T5-207',207,'Disponible','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50C','T5-208',208,'Disponible','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-209',209,'Entregado','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50B','T5-210',210,'Disponible','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50B','T5-211',211,'Disponible','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-212',212,'Vendido','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'60B','T5-213',213,'Vendido','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'60A','T5-301',301,'Vendido','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-302',302,'Disponible','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-303',303,'Vendido','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-304',304,'Vendido','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-305',305,'Disponible','EN PROCESO',1,1,0.75,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-306',306,'Disponible','EN PROCESO',1,1,0.75,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'70A','T5-307',307,'Disponible','EN PROCESO',1,1,0.75,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-308',308,'Vendido','EN PROCESO',1,0,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50B','T5-309',309,'Disponible','EN PROCESO',0,0,0,0,0.5,0.2,0.2,0,0,0,0,0],
+  [5,'50B','T5-310',310,'Disponible','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-311',311,'Vendido','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'60B','T5-312',312,'Disponible','EN PROCESO',1,1,1,0.75,0.5,0.2,0.2,0,0,0,0,0],
+  [5,'60A','T5-401',401,'Vendido','EN PROCESO',1,1,0.75,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-402',402,'Vendido','EN PROCESO',1,1,0.5,0,0.5,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-403',403,'Vendido','EN PROCESO',1,1,0.5,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-404',404,'Vendido','EN PROCESO',1,1,0.75,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-405',405,'Disponible','EN PROCESO',1,1,0.5,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-406',406,'Vendido','EN PROCESO',0.75,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'30A','T5-407',407,'Vendido','EN PROCESO',0.5,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'30B','T5-408',408,'Vendido','EN PROCESO',0.5,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-409',409,'Disponible','EN PROCESO',1,1,0.5,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50B','T5-410',410,'Disponible','EN PROCESO',0.75,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50B','T5-411',411,'Disponible','EN PROCESO',0.75,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-412',412,'Disponible','EN PROCESO',0.5,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'60B','T5-413',413,'Disponible','EN PROCESO',0.5,1,0,0.75,0.5,0.2,0.2,0,0,0,0,0],
+  [5,'75A','T5-501',501,'Vendido','EN PROCESO',1,1,1,0.75,0.5,0.2,0.2,0,0,0,0,0],
+  [5,'30A','T5-502',502,'Vendido','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-503',503,'Vendido','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-504',504,'Vendido','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-505',505,'Vendido','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-506',506,'Vendido','EN PROCESO',1,1,0.75,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'30A','T5-507',507,'Vendido','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'30B','T5-508',508,'Disponible','EN PROCESO',1,0.75,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-509',509,'Disponible','EN PROCESO',1,1,0.75,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50B','T5-510',510,'Disponible','EN PROCESO',1,1,0.75,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50B','T5-511',511,'Disponible','EN PROCESO',1,1,0.75,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-512',512,'Disponible','EN PROCESO',1,1,1,0.75,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'60B','T5-513',513,'Vendido','EN PROCESO',1,1,0.75,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'75A','T5-601',601,'Disponible','EN PROCESO',0.25,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'30A','T5-602',602,'Vendido','EN PROCESO',0,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-603',603,'Disponible','EN PROCESO',0,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-604',604,'Disponible','EN PROCESO',0,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-605',605,'Disponible','EN PROCESO',0,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-606',606,'Disponible','EN PROCESO',0,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'30A','T5-607',607,'Vendido','EN PROCESO',0,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'30B','T5-608',608,'Disponible','EN PROCESO',0,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-609',609,'Vendido','EN PROCESO',0,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50B','T5-610',610,'Disponible','EN PROCESO',0,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50B','T5-611',611,'Disponible','EN PROCESO',0,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-612',612,'Disponible','EN PROCESO',0,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'60B','T5-613',613,'Vendido','EN PROCESO',0,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-701',701,'Vendido','EN PROCESO',0,0.5,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-702',702,'Disponible','EN PROCESO',0,0.5,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-703',703,'Disponible','EN PROCESO',0,0.5,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'30A','T5-704',704,'Vendido','EN PROCESO',0,0.75,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'30B','T5-705',705,'Disponible','EN PROCESO',0,0,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-706',706,'Disponible','EN PROCESO',0,0,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50B','T5-707',707,'Disponible','EN PROCESO',0,0,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50B','T5-708',708,'Disponible','EN PROCESO',0,0.75,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'50A','T5-709',709,'Vendido','EN PROCESO',0,0.75,0,0,0.75,0.2,0.2,0,0,0,0,0],
+  [5,'60B','T5-710',710,'Vendido','EN PROCESO',0,1,0,0,0.75,0.2,0.2,0,0,0,0,0],
+];
+
+// ─────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────
+let apartments, filtered=[], sortCol='idObra', sortDir=1, page=1, editMode=false;
+const PAGE_SIZE=50;
+let deleteSnapIdx=null;
+
+function loadData(){
+  try{
+    const saved=JSON.parse(localStorage.getItem('apt_data_v2')||'null');
+    if(saved&&saved.length===SEED.length){apartments=saved;return;}
+  }catch(e){}
+  apartments=SEED.map((r,i)=>({
+    id:i, torre:r[0], tipo:r[1], idObra:r[2], apto:r[3],
+    estadoVentas:r[4], estadoObra:r[5],
+    acts:r.slice(6),
+    fechaEntregaComercial:null,
+    fechaEntregaObra:null,
+    progreso:Math.round(r.slice(6).reduce((a,v)=>a+v,0)/12*100)
+  }));
+}
+
+function saveData(){
+  try{localStorage.setItem('apt_data_v2',JSON.stringify(apartments));}catch(e){}
+}
+
+function loadSnapshots(){
+  try{return JSON.parse(localStorage.getItem('apt_snaps')||'[]');}catch(e){return[];}
+}
+function saveSnapshots(snaps){
+  try{localStorage.setItem('apt_snaps',JSON.stringify(snaps));}catch(e){}
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────────
+function progColor(p){if(p>=100)return'#22c55e';if(p>=75)return'#4f9cf9';if(p>=50)return'#eab308';if(p>=25)return'#f97316';return'#ef4444';}
+function actClass(v){if(v>=1)return'ac-done';if(v>=0.75)return'ac-p75';if(v>=0.5)return'ac-p50';if(v>0)return'ac-p25';return'ac-none';}
+function actLabel(v){if(v>=1)return'✓';if(v>0)return Math.round(v*100)+'%';return'—';}
+function getDays(fecha){if(!fecha)return null;const t=new Date();t.setHours(0,0,0,0);const d=new Date(fecha+'T00:00:00');return Math.round((d-t)/(864e5));}
+function gapAlert(fechaObra, fechaComercial){
+  // Returns 'gap-critico', 'gap-riesgo', or '' based on days between obra and comercial
+  if(!fechaObra||!fechaComercial)return'';
+  const obra=new Date(fechaObra+'T00:00:00');
+  const comercial=new Date(fechaComercial+'T00:00:00');
+  const diff=Math.round((comercial-obra)/(864e5)); // days obra is before comercial
+  if(diff<0)return'gap-critico';   // obra AFTER comercial — critical
+  if(diff<21)return'gap-critico';  // less than 3 weeks — critical
+  if(diff<28)return'gap-riesgo';   // less than 4 weeks — warning buffer
+  return'';
+}
+
+function gapDays(fechaObra, fechaComercial){
+  if(!fechaObra||!fechaComercial)return null;
+  const obra=new Date(fechaObra+'T00:00:00');
+  const comercial=new Date(fechaComercial+'T00:00:00');
+  return Math.round((comercial-obra)/(864e5));
+}
+
+function alertClass(fecha,prog){
+  if(!fecha)return'';
+  const d=getDays(fecha);
+  if(d<0&&prog<100)return'vencido';
+  if(prog>=100)return'ok';
+  // Riesgo: el progreso actual está rezagado respecto al tiempo restante
+  // Se asume que "100% de trabajo" debe estar listo para la fecha de entrega.
+  // Umbral rojo: <50% del avance esperado proporcional O quedan <=7 días con obra incompleta
+  // Umbral naranja: entre 50% y 80% del avance esperado proporcional
+  // Para calcular avance esperado necesitamos fecha de inicio estimada (usamos la fecha del primer snapshot o 90 días antes de entrega como referencia)
+  // Enfoque simple y robusto: si quedan d días y falta (100-prog)% de trabajo,
+  // verificamos si la velocidad necesaria es "razonable"
+  // Semáforo: RIESGO si quedan <=30 días y progreso < (1 - d/30)*100 escalado
+  // Lógica: si el trabajo restante no puede completarse a ritmo normal
+  // Usamos: progreso esperado = 100 * (1 - d / totalDias)  donde totalDias = 90 referencia
+  const REF_DAYS = 90; // horizonte de referencia para calcular ritmo esperado
+  if(d<=7&&prog<100)return'vencido'; // últimos 7 días sin completar = crítico
+  if(d<=30){
+    // En las últimas 4 semanas, verificar si el progreso está a tiempo
+    const diasRestPct = d / REF_DAYS; // fracción de tiempo restante
+    const trabajoRestante = 100 - prog;
+    // Si el trabajo restante supera 2x lo que el tiempo restante "debería" representar
+    if(trabajoRestante > 0 && d < trabajoRestante * 0.8) return 'riesgo';
+  }
+  return'ok';
+}
+const OBRA_COLORS=['obra-entregado','obra-limpieza','obra-proceso','obra-cliente','obra-extra1','obra-extra2'];
+const VENTAS_COLORS=['ev-Entregado','ev-Vendido','ev-Disponible','ev-Extra1','ev-Extra2','ev-Extra3'];
+function obraClass(s){const i=OBRA_OPTS.indexOf(s);return OBRA_COLORS[i>=0?i:OBRA_COLORS.length-1];}
+function ventasClass(s){const i=VENTAS_OPTS.indexOf(s);return VENTAS_COLORS[i>=0?i:VENTAS_COLORS.length-1];}
+function calcProg(acts){return Math.round(acts.reduce((a,v)=>a+v,0)/12*100);}
+
+// ─────────────────────────────────────────────────────────────────────
+// CLOCK
+// ─────────────────────────────────────────────────────────────────────
+function tick(){document.getElementById('clock').textContent=new Date().toLocaleDateString('es-GT',{weekday:'short',day:'2-digit',month:'short',year:'numeric'})+' '+new Date().toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+setInterval(tick,1000);tick();
+
+// ─────────────────────────────────────────────────────────────────────
+// NAV
+// ─────────────────────────────────────────────────────────────────────
+function showPage(p){
+  document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(el=>el.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  const tabIdx={seguimiento:0,snapshots:1,torre5:2,config:3};
+  document.querySelectorAll('.nav-tab')[tabIdx[p]||0].classList.add('active');
+  if(p==='snapshots')renderSnapshots();
+  if(p==='config')renderConfig();
+  if(p==='torre5')renderTorre5();
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// STATS
+// ─────────────────────────────────────────────────────────────────────
+function updateStats(){
+  const total=apartments.length;
+  // Estado de OBRA
+  // Count each obra option dynamically from OBRA_OPTS
+  const obraCount={};
+  OBRA_OPTS.forEach(o=>{ obraCount[o]=apartments.filter(a=>a.estadoObra===o).length; });
+  // Group: entregados = any option containing 'entregad' (case insensitive)
+  const obraEntregs=OBRA_OPTS.filter(o=>o.toLowerCase().includes('entregad'));
+  const obraLim=OBRA_OPTS.filter(o=>o.toUpperCase().includes('LIMPIEZA'));
+  const obraPro=OBRA_OPTS.filter(o=>o.toUpperCase().includes('PROCESO'));
+  // Estado de VENTAS
+  const vendidos=apartments.filter(a=>a.estadoVentas==='Vendido').length;
+  const disponibles=apartments.filter(a=>a.estadoVentas==='Disponible').length;
+  // Alertas
+  const venc=apartments.filter(a=>alertClass(a.fechaEntregaObra,a.progreso)==='vencido').length;
+  const riesgo=apartments.filter(a=>alertClass(a.fechaEntregaObra,a.progreso)==='riesgo').length;
+  const gapCritico=apartments.filter(a=>gapAlert(a.fechaEntregaObra,a.fechaEntregaComercial)==='gap-critico').length;
+  const gapRiesgo=apartments.filter(a=>gapAlert(a.fechaEntregaObra,a.fechaEntregaComercial)==='gap-riesgo').length;
+
+    const ENTG_COLORS=['#22c55e','#3b82f6','#14b8a6','#06b6d4'];
+  const entgChips=obraEntregs.map((o,i)=>obraCount[o]?`<div class="stat-chip" title="${o}" onclick="document.getElementById('fObra').value='${o}';applyFilters()"><div class="dot" style="background:${ENTG_COLORS[i%ENTG_COLORS.length]}"></div><div><div class="num">${obraCount[o]}</div><div class="lbl">${o.length>18?o.substring(0,16)+'…':o}</div></div></div>`:'').join('');
+  const limChips=obraLim.map(o=>obraCount[o]?`<div class="stat-chip" onclick="document.getElementById('fObra').value='${o}';applyFilters()"><div class="dot" style="background:#a855f7"></div><div><div class="num">${obraCount[o]}</div><div class="lbl">Limpieza</div></div></div>`:'').join('');
+  const proChips=obraPro.map(o=>obraCount[o]?`<div class="stat-chip" onclick="document.getElementById('fObra').value='${o}';applyFilters()"><div class="dot" style="background:#f97316"></div><div><div class="num">${obraCount[o]}</div><div class="lbl">En proceso</div></div></div>`:'').join('');
+  document.getElementById('statsBar').innerHTML=`
+    <div class="stat-chip" title="Total de apartamentos"><div class="dot" style="background:#4f9cf9"></div><div><div class="num">${total}</div><div class="lbl">Total</div></div></div>
+    <div style="width:1px;background:var(--border);margin:4px 2px;align-self:stretch"></div>
+    ${entgChips}${limChips}${proChips}
+    <div style="width:1px;background:var(--border);margin:4px 2px;align-self:stretch"></div>
+    <div class="stat-chip" title="Apartamentos vendidos" onclick="document.getElementById('fVentas').value='Vendido';applyFilters()"><div class="dot" style="background:#14b8a6"></div><div><div class="num">${vendidos}</div><div class="lbl">Vendidos</div></div></div>
+    ${disponibles?`<div class="stat-chip" title="Apartamentos disponibles" onclick="document.getElementById('fVentas').value='Disponible';applyFilters()"><div class="dot" style="background:#5a6180"></div><div><div class="num">${disponibles}</div><div class="lbl">Disponibles</div></div></div>`:''}
+    <div style="width:1px;background:var(--border);margin:4px 2px;align-self:stretch"></div>
+    ${venc?`<div class="stat-chip" onclick="document.getElementById('fAlerta').value='vencido';applyFilters()"><div class="dot" style="background:#ef4444"></div><div><div class="num">${venc}</div><div class="lbl">Vencidos</div></div></div>`:''}
+    ${riesgo?`<div class="stat-chip" onclick="document.getElementById('fAlerta').value='riesgo';applyFilters()"><div class="dot" style="background:#f97316"></div><div><div class="num">${riesgo}</div><div class="lbl">Riesgo obra</div></div></div>`:''}
+    ${gapCritico?`<div class="stat-chip" onclick="document.getElementById('fAlerta').value='gap_critico';applyFilters()"><div class="dot" style="background:#ef4444"></div><div><div class="num">${gapCritico}</div><div class="lbl">Gap crítico</div></div></div>`:''}
+    ${gapRiesgo?`<div class="stat-chip" onclick="document.getElementById('fAlerta').value='gap_riesgo';applyFilters()"><div class="dot" style="background:#eab308"></div><div><div class="num">${gapRiesgo}</div><div class="lbl">Gap ajustado</div></div></div>`:''}`;
+  updateAlerts(venc,riesgo,gapCritico,gapRiesgo);
+}
+
+function updateAlerts(venc,riesgo,gapCrit,gapRisk){
+  const panel=document.getElementById('alertsPanel');
+  const total=(venc||0)+(riesgo||0)+(gapCrit||0)+(gapRisk||0);
+  if(!total){panel.classList.remove('show');return;}
+  panel.classList.add('show');
+  document.getElementById('alertsTitle').textContent=`${total} alertas activas`;
+  const vencList=apartments.filter(a=>alertClass(a.fechaEntregaObra,a.progreso)==='vencido');
+  const riesgoList=apartments.filter(a=>alertClass(a.fechaEntregaObra,a.progreso)==='riesgo');
+  const gapCriticoList=apartments.filter(a=>gapAlert(a.fechaEntregaObra,a.fechaEntregaComercial)==='gap-critico');
+  const gapRiesgoList=apartments.filter(a=>gapAlert(a.fechaEntregaObra,a.fechaEntregaComercial)==='gap-riesgo');
+  document.getElementById('alertsBody').innerHTML=[
+    ...vencList.map(a=>`<div class="alert-row"><span class="al-badge al-vencido">OBRA VENCIDA</span><strong>${a.idObra}</strong> · ${a.progreso}% · <span style="color:#ef4444">${Math.abs(getDays(a.fechaEntregaObra))}d vencido</span></div>`),
+    ...riesgoList.map(a=>`<div class="alert-row"><span class="al-badge al-riesgo">RIESGO OBRA</span><strong>${a.idObra}</strong> · ${a.progreso}% · faltan ${getDays(a.fechaEntregaObra)}d</div>`),
+    ...gapCriticoList.map(a=>{const g=gapDays(a.fechaEntregaObra,a.fechaEntregaComercial);return`<div class="alert-row"><span class="al-badge al-gap-critico">GAP CRÍTICO</span><strong>${a.idObra}</strong> · Obra: ${a.fechaEntregaObra||'—'} → Comercial: ${a.fechaEntregaComercial||'—'} · <span style="color:#ef4444">${g<0?'obra DESPUÉS de comercial':'solo '+g+'d de margen (mín. 21)'}</span></div>`;}),
+    ...gapRiesgoList.map(a=>{const g=gapDays(a.fechaEntregaObra,a.fechaEntregaComercial);return`<div class="alert-row"><span class="al-badge al-gap-riesgo">GAP AJUSTADO</span><strong>${a.idObra}</strong> · Obra: ${a.fechaEntregaObra||'—'} → Comercial: ${a.fechaEntregaComercial||'—'} · ${g}d de margen</div>`;})
+  ].join('');
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// FILTER + SORT
+// ─────────────────────────────────────────────────────────────────────
+function refreshFilterOpts(){
+  const fObra=document.getElementById('fObra');
+  if(!fObra)return;
+  const curVal=fObra.value;
+  fObra.innerHTML='<option value="">Todos los estados</option>'+OBRA_OPTS.map(o=>`<option value="${o}"${o===curVal?' selected':''}>${o}</option>`).join('');
+}
+
+function applyFilters(){
+  refreshFilterOpts();
+  const t=document.getElementById('fTorre').value;
+  const o=document.getElementById('fObra').value;
+  const v=document.getElementById('fVentas').value;
+  const al=document.getElementById('fAlerta').value;
+  const s=document.getElementById('fSearch').value.toLowerCase();
+  filtered=apartments.filter(a=>{
+    if(t&&a.torre!=t)return false;
+    if(o&&a.estadoObra!==o)return false;
+    if(v&&a.estadoVentas!==v)return false;
+    if(al==='vencido'&&alertClass(a.fechaEntregaObra,a.progreso)!=='vencido')return false;
+    if(al==='riesgo'&&alertClass(a.fechaEntregaObra,a.progreso)!=='riesgo')return false;
+    if(al==='con_fecha'&&!a.fechaEntregaObra&&!a.fechaEntregaComercial)return false;
+    if(al==='sin_fecha'&&(a.fechaEntregaObra||a.fechaEntregaComercial))return false;
+    if(al==='gap_critico'&&gapAlert(a.fechaEntregaObra,a.fechaEntregaComercial)!=='gap-critico')return false;
+    if(al==='gap_riesgo'&&gapAlert(a.fechaEntregaObra,a.fechaEntregaComercial)!=='gap-riesgo')return false;
+    if(s&&!a.idObra.toLowerCase().includes(s)&&!String(a.apto).includes(s)&&!a.tipo.toLowerCase().includes(s))return false;
+    return true;
+  });
+  page=1;sortFiltered();render();
+}
+function resetFilters(){['fTorre','fObra','fVentas','fAlerta'].forEach(id=>document.getElementById(id).value='');document.getElementById('fSearch').value='';applyFilters();}
+function sortBy(col){if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=1;}sortFiltered();render();}
+function sortFiltered(){filtered.sort((a,b)=>{let va=a[sortCol],vb=b[sortCol];if(sortCol==='fechaEntregaComercial'||sortCol==='fechaEntregaObra'){va=va||'9999';vb=vb||'9999';}return typeof va==='string'?va.localeCompare(vb)*sortDir:(va-vb)*sortDir;});}
+
+// ─────────────────────────────────────────────────────────────────────
+// EDIT MODE
+// ─────────────────────────────────────────────────────────────────────
+function toggleEdit(on){
+  editMode=on;
+  document.getElementById('editBar').classList.toggle('show',on);
+  document.getElementById('editBtn').style.display=on?'none':'';
+  render();
+}
+
+function updateApt(id,field,val){
+  const apt=apartments.find(a=>a.id===id);
+  if(!apt)return;
+  if(field==='act'){
+    const [,idx,v]=[...val.match(/(\d+):([\d.]+)/)].map((x,i)=>i>0?+x:x);
+    apt.acts[idx]=Math.min(1,Math.max(0,v));
+    apt.progreso=calcProg(apt.acts);
+  }else if(field==='fechaEntregaComercial'){
+    apt.fechaEntregaComercial=val||null;
+  }else if(field==='fechaEntregaObra'){
+    apt.fechaEntregaObra=val||null;
+  }else{
+    apt[field]=val;
+  }
+  saveData();
+  updateStats();
+  // re-render just that row
+  renderRow(apt);
+}
+
+function renderRow(apt){
+  const tr=document.getElementById('row-'+apt.id);
+  if(!tr)return;
+  const al=alertClass(apt.fechaEntregaObra,apt.progreso);
+  tr.className=al?'row-'+al:'';
+  // progress cell
+  const pc=tr.querySelector('.progress-fill');
+  if(pc){pc.style.width=apt.progreso+'%';pc.style.background=progColor(apt.progreso);}
+  const pp=tr.querySelector('.progress-pct');
+  if(pp)pp.textContent=apt.progreso+'%';
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// RENDER TABLE
+// ─────────────────────────────────────────────────────────────────────
+function updateActHeaders(){
+  ACTS.forEach((name,i)=>{
+    const th=document.getElementById('act-th-'+i);
+    if(th){th.title=name;th.textContent=name.substring(0,2).toUpperCase();}
+  });
+}
+
+function render(){
+  updateActHeaders();
+  const start=(page-1)*PAGE_SIZE,end=Math.min(start+PAGE_SIZE,filtered.length);
+  const pageData=filtered.slice(start,end);
+  document.getElementById('emptyState').style.display=filtered.length?'none':'block';
+  document.getElementById('tableBody').innerHTML=pageData.map(a=>buildRow(a)).join('');
+  renderPagination();
+}
+
+function buildRow(a){
+  const al=alertClass(a.fechaEntregaObra,a.progreso);
+  const alC=alertClass(a.fechaEntregaComercial,a.progreso);
+  const daysObra=a.fechaEntregaObra?getDays(a.fechaEntregaObra):null;
+  const daysBadge=daysObra!==null?`<span class="days-badge db-${al||'ok'}">${daysObra<0?Math.abs(daysObra)+'d venc':daysObra+'d'}</span>`:'';
+
+  const ventasCell=editMode
+    ?`<select class="cell-edit" onchange="updateApt(${a.id},'estadoVentas',this.value)">${VENTAS_OPTS.map(o=>`<option${o===a.estadoVentas?' selected':''}>${o}</option>`).join('')}</select>`
+    :`<span class="ventas-chip ev-${a.estadoVentas}">${a.estadoVentas}</span>`;
+
+  const obraCell=editMode
+    ?`<select class="cell-edit" style="min-width:160px" onchange="updateApt(${a.id},'estadoObra',this.value)">${OBRA_OPTS.map(o=>`<option${o===a.estadoObra?' selected':''}>${o}</option>`).join('')}</select>`
+    :`<span class="obra-chip ${obraClass(a.estadoObra)}">${a.estadoObra}</span>`;
+
+  const actCells=a.acts.map((v,i)=>editMode
+    ?`<td><input type="number" class="cell-edit act-input" min="0" max="1" step="0.25" value="${v}" onchange="updateApt(${a.id},'act','${i}:'+this.value)"></td>`
+    :`<td><span class="act-cell ${actClass(v)}" title="${ACTS[i]}:${Math.round(v*100)}%">${actLabel(v)}</span></td>`
+  ).join('');
+
+  const gapAl=gapAlert(a.fechaEntregaObra,a.fechaEntregaComercial);
+  const gapD=gapDays(a.fechaEntregaObra,a.fechaEntregaComercial);
+  const gapBadge=gapAl?`<span class="gap-chip ${gapAl}" title="Margen entre obra y entrega comercial">${gapD<0?'⚠ obra>comercial':gapD+'d gap'}</span>`:(gapD!==null?`<span class="gap-chip gap-ok">${gapD}d ✓</span>`:'');
+  const fechaCell=`<td><input type="date" class="date-input${alC?' '+alC:''}" value="${a.fechaEntregaComercial||''}" onchange="updateApt(${a.id},'fechaEntregaComercial',this.value)" title="F.Comercial" style="width:110px"></td><td><input type="date" class="date-input${al?' '+al:''}" value="${a.fechaEntregaObra||''}" onchange="updateApt(${a.id},'fechaEntregaObra',this.value)" title="F.Obra" style="width:110px"></td><td>${gapBadge}</td>`;
+
+  const trClass=[al?'row-'+al:'',gapAl?'row-'+gapAl:''].filter(Boolean).join(' ');
+  return `<tr id="row-${a.id}" class="${trClass}">
+    <td><span class="apt-id">${a.idObra}</span></td>
+    <td><span class="torre-badge t${a.torre}">T${a.torre}</span></td>
+    <td style="font-family:'DM Mono',monospace">${a.apto}</td>
+    <td style="font-size:.7rem">${a.tipo}</td>
+    <td>${ventasCell}</td>
+    <td>${obraCell}</td>
+    <td><div class="progress-wrap"><div class="progress-bg"><div class="progress-fill" style="width:${a.progreso}%;background:${progColor(a.progreso)}"></div></div><span class="progress-pct">${a.progreso}%</span></div></td>
+    ${actCells}
+    ${fechaCell}
+    <td>${daysBadge}</td>
+  </tr>`;
+}
+
+function renderPagination(){
+  const total=filtered.length,pages=Math.ceil(total/PAGE_SIZE);
+  if(pages<=1){document.getElementById('pagination').innerHTML='';return;}
+  const start=(page-1)*PAGE_SIZE+1,end=Math.min(page*PAGE_SIZE,total);
+  let btns='';
+  for(let i=1;i<=pages;i++){
+    if(i===1||i===pages||Math.abs(i-page)<=2)btns+=`<button class="pag-btn${i===page?' active':''}" onclick="goPage(${i})">${i}</button>`;
+    else if(Math.abs(i-page)===3)btns+=`<span style="color:var(--muted);padding:0 3px">…</span>`;
+  }
+  document.getElementById('pagination').innerHTML=`
+    <span class="pag-info">${start}–${end} de ${total}</span>
+    <div class="pag-btns">
+      <button class="pag-btn" onclick="goPage(${page-1})" ${page===1?'disabled':''}>‹</button>${btns}<button class="pag-btn" onclick="goPage(${page+1})" ${page===pages?'disabled':''}>›</button>
+    </div>`;
+}
+function goPage(p){const pages=Math.ceil(filtered.length/PAGE_SIZE);if(p<1||p>pages)return;page=p;render();window.scrollTo({top:0,behavior:'smooth'});}
+
+// ─────────────────────────────────────────────────────────────────────
+// EXPORT EXCEL
+// ─────────────────────────────────────────────────────────────────────
+function exportExcel(){
+  const ws_data=[['ID Obra','Torre','Apto','Tipo','Est. Ventas','Est. Obra','Progreso %',...ACTS,'F.Entrega Comercial','F.Entrega Obra','Gap (días)','Estado Gap','Días restantes obra']];
+  apartments.forEach(a=>{
+    const daysXlsx=a.fechaEntregaObra?getDays(a.fechaEntregaObra):'';
+    const gapXlsx=gapDays(a.fechaEntregaObra,a.fechaEntregaComercial);
+    const gapStatusXlsx=gapAlert(a.fechaEntregaObra,a.fechaEntregaComercial)==='gap-critico'?'CRÍTICO':gapAlert(a.fechaEntregaObra,a.fechaEntregaComercial)==='gap-riesgo'?'AJUSTADO':gapXlsx!==null?'OK':'';
+    ws_data.push([a.idObra,a.torre,a.apto,a.tipo,a.estadoVentas,a.estadoObra,a.progreso,...a.acts.map(v=>Math.round(v*100)+'%'),a.fechaEntregaComercial||'',a.fechaEntregaObra||'',gapXlsx!==null?gapXlsx:'',gapStatusXlsx,daysXlsx]);
+  });
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(ws_data);
+  // Column widths
+  ws['!cols']=[{wch:10},{wch:6},{wch:6},{wch:8},{wch:12},{wch:20},{wch:10},...ACTS.map(()=>({wch:6})),{wch:18},{wch:16},{wch:8},{wch:10},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws,'Control de Apartamentos');
+  // Summary sheet
+  const torres=[1,2,3,4,5];
+  const sum_data=[['Resumen por Torre','','','',''],['Torre','Total Aptos','Prog. Promedio','Entregados (obra)','Vendidos']];
+  torres.forEach(t=>{
+    const ta=apartments.filter(a=>a.torre===t);
+    sum_data.push([`Torre ${t}`,ta.length,Math.round(ta.reduce((s,a)=>s+a.progreso,0)/ta.length)+'%',ta.filter(a=>a.estadoObra.includes('condominia')).length,ta.filter(a=>a.estadoVentas==='Vendido').length]);
+  });
+  const ws2=XLSX.utils.aoa_to_sheet(sum_data);
+  ws2['!cols']=[{wch:10},{wch:12},{wch:14},{wch:16},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws2,'Resumen Torres');
+  XLSX.writeFile(wb,`Control_Apartamentos_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// EXPORT PDF (client-side via window.print)
+// ─────────────────────────────────────────────────────────────────────
+function exportPDF(){
+  const today=new Date().toLocaleDateString('es-GT',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  const rows=filtered.map(a=>{
+    const daysObra=a.fechaEntregaObra?getDays(a.fechaEntregaObra):'—';
+    const al=alertClass(a.fechaEntregaObra,a.progreso);
+    const rowStyle=al==='vencido'?'background:#fff0f0':al==='riesgo'?'background:#fff8f0':'';
+    return `<tr style="${rowStyle}">
+      <td>${a.idObra}</td><td>T${a.torre}</td><td>${a.apto}</td><td>${a.tipo}</td>
+      <td>${a.estadoVentas}</td><td>${a.estadoObra}</td>
+      <td style="color:${progColor(a.progreso)};font-weight:600">${a.progreso}%</td>
+      ${a.acts.map(v=>`<td style="text-align:center;color:${v>=1?'#16a34a':v>0?'#ca8a04':'#dc2626'}">${v>=1?'✓':v>0?Math.round(v*100)+'%':'—'}</td>`).join('')}
+      <td>${a.fechaEntregaComercial||'—'}</td>
+      <td>${a.fechaEntregaObra||'—'}</td>
+      <td style="color:${al==='vencido'?'#dc2626':al==='riesgo'?'#ea580c':'#16a34a'}">${typeof daysObra==='number'?(daysObra<0?Math.abs(daysObra)+'d venc':daysObra+'d'):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const stats=`
+    <div style="display:flex;gap:20px;margin-bottom:16px;flex-wrap:wrap">
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:10px 16px">
+        <div style="font-size:11px;color:#64748b">Total</div>
+        <div style="font-size:22px;font-weight:700">${apartments.length}</div>
+      </div>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 16px">
+        <div style="font-size:11px;color:#64748b">Entregados</div>
+        <div style="font-size:22px;font-weight:700;color:#16a34a">${apartments.filter(a=>a.estadoObra.includes('condominia')).length}</div>
+      </div>
+      <div style="background:#fdf4ff;border:1px solid #e9d5ff;border-radius:6px;padding:10px 16px">
+        <div style="font-size:11px;color:#64748b">Limpieza final</div>
+        <div style="font-size:22px;font-weight:700;color:#9333ea">${apartments.filter(a=>a.estadoObra.includes('LIMPIEZA')).length}</div>
+      </div>
+      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:10px 16px">
+        <div style="font-size:11px;color:#64748b">En proceso</div>
+        <div style="font-size:22px;font-weight:700;color:#ea580c">${apartments.filter(a=>a.estadoObra.includes('PROCESO')).length}</div>
+      </div>
+    </div>`;
+
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head>
+    <meta charset="UTF-8"><title>Control de Apartamentos</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:Arial,sans-serif;font-size:11px;color:#1e293b;padding:20px}
+      h1{font-size:18px;margin-bottom:4px}
+      .sub{font-size:11px;color:#64748b;margin-bottom:16px}
+      table{width:100%;border-collapse:collapse;font-size:9px}
+      th{background:#1e293b;color:#fff;padding:5px 4px;text-align:left;font-size:8px;letter-spacing:.03em}
+      td{padding:4px;border-bottom:1px solid #e2e8f0}
+      tr:hover td{background:#f8fafc}
+      @page{margin:1cm;size:A3 landscape}
+      @media print{body{padding:0}}
+    </style>
+  </head><body>
+    <h1>🏗 Control de Apartamentos</h1>
+    <p class="sub">Generado: ${today} · Mostrando ${filtered.length} apartamentos</p>
+    ${stats}
+    <table>
+      <thead><tr>
+        <th>ID Obra</th><th>T</th><th>Apto</th><th>Tipo</th>
+        <th>Est. Ventas</th><th>Est. Obra</th><th>Prog.</th>
+        ${ACTS.map(a=>`<th title="${a}">${a.substring(0,3)}</th>`).join('')}
+        <th>F.Comercial</th><th>F.Obra</th><th>Días</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <script>window.onload=()=>window.print();<\/script>
+  </body></html>`);
+  w.document.close();
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// SNAPSHOTS
+// ─────────────────────────────────────────────────────────────────────
+function openSnapshotModal(){
+  const today=new Date().toISOString().slice(0,10);
+  document.getElementById('snapDate').value=today;
+  document.getElementById('snapLabel').value=`Semana ${getWeekNumber(new Date())}`;
+  document.getElementById('snapNotes').value='';
+  document.getElementById('snapModal').classList.add('open');
+}
+function closeModal(){document.getElementById('snapModal').classList.remove('open');}
+function getWeekNumber(d){const date=new Date(d);date.setHours(0,0,0,0);date.setDate(date.getDate()+3-(date.getDay()+6)%7);const week1=new Date(date.getFullYear(),0,4);return 1+Math.round(((date.getTime()-week1.getTime())/864e5-3+(week1.getDay()+6)%7)/7);}
+
+function saveSnapshot(){
+  const date=document.getElementById('snapDate').value;
+  const label=document.getElementById('snapLabel').value||'Snapshot';
+  const notes=document.getElementById('snapNotes').value;
+  if(!date)return;
+  const snaps=loadSnapshots();
+  const snap={
+    id:Date.now(), date, label, notes,
+    ts:new Date().toISOString(),
+    total:apartments.length,
+    progAvg:Math.round(apartments.reduce((s,a)=>s+a.progreso,0)/apartments.length),
+    entregados:apartments.filter(a=>a.estadoObra.includes('condominia')).length,
+    limpieza:apartments.filter(a=>a.estadoObra.includes('LIMPIEZA')).length,
+    proceso:apartments.filter(a=>a.estadoObra.includes('PROCESO')).length,
+    vendidos:apartments.filter(a=>a.estadoVentas==='Vendido').length,
+    conFecha:apartments.filter(a=>a.fechaEntregaComercial||a.fechaEntregaObra).length,
+    actAvgs:ACTS.map((_,i)=>Math.round(apartments.reduce((s,a)=>s+a.acts[i],0)/apartments.length*100)),
+    torreProgs:[1,2,3,4,5].map(t=>{const ta=apartments.filter(a=>a.torre===t);return ta.length?Math.round(ta.reduce((s,a)=>s+a.progreso,0)/ta.length):0;}),
+    torreActAvgs:[1,2,3,4,5].map(t=>{const ta=apartments.filter(a=>a.torre===t);if(!ta.length)return ACTS.map(()=>0);return ACTS.map((_,i)=>Math.round(ta.reduce((s,a)=>s+a.acts[i],0)/ta.length*100));}),
+  };
+  snaps.unshift(snap);
+  saveSnapshots(snaps);
+  closeModal();
+  renderSnapshots();
+  showPage('snapshots');
+}
+
+const T_COLORS_SNAP=['#4f9cf9','#7c5af8','#14b8a6','#eab308','#f97316'];
+
+function renderSnapshots(){
+  const snaps=loadSnapshots();
+  const list=document.getElementById('snapshotList');
+  const trend=document.getElementById('snapshotTrend');
+
+  if(!snaps.length){
+    list.innerHTML=`<div class="snap-empty"><div class="icon">📸</div><p>No hay snapshots guardados aún.<br>Guarda el primer snapshot para comenzar el seguimiento semanal.</p></div>`;
+    trend.innerHTML='';
+    return;
+  }
+
+  // ── Tendencia sparkline (últimos 8)
+  const last8=[...snaps].reverse().slice(-8);
+  const maxP=Math.max(...last8.map(s=>s.progAvg),1);
+  trend.innerHTML=`<div class="chart-card" style="margin-bottom:14px">
+    <div style="font-size:.75rem;font-weight:600;color:var(--muted);margin-bottom:10px">Tendencia de progreso promedio</div>
+    <div style="display:flex;align-items:flex-end;gap:5px;height:72px;margin-bottom:4px">
+      ${last8.map(s=>{
+        const h=Math.round(s.progAvg/maxP*54)+6;
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+          <div style="font-size:.58rem;color:var(--accent);font-family:'DM Mono',monospace">${s.progAvg}%</div>
+          <div data-h="${h}" style="width:100%;background:${progColor(s.progAvg)};border-radius:3px 3px 0 0;opacity:.85"></div>
+        </div>`;}).join('')}
+    </div>
+    <div style="display:flex;gap:5px">
+      ${last8.map(s=>`<div style="flex:1;font-size:.56rem;color:var(--muted);text-align:center;overflow:hidden;white-space:nowrap">${s.date.slice(5)}</div>`).join('')}
+    </div>
+  </div>`;
+  trend.querySelectorAll('[data-h]').forEach(el=>{el.style.height=el.getAttribute('data-h')+'px';});
+
+  // ── Cards de snapshots con dashboard inline expandible
+  list.innerHTML=snaps.map((s,i)=>{ try {
+    const prev=snaps[i+1];
+    const progDiff=prev?s.progAvg-prev.progAvg:null;
+    const entDiff=prev?s.entregados-prev.entregados:null;
+    const limDiff=prev?s.limpieza-prev.limpieza:null;
+    const proDiff=prev?s.proceso-prev.proceso:null;
+
+    // Barras por torre inline
+    const torresBars=s.torreProgs.map((p,ti)=>`
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+        <span style="font-size:.65rem;font-weight:600;color:${T_COLORS_SNAP[ti]};min-width:18px">T${ti+1}</span>
+        <div style="flex:1;height:7px;background:var(--border);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${p}%;background:${T_COLORS_SNAP[ti]};border-radius:4px"></div>
+        </div>
+        <span style="font-size:.65rem;font-family:'DM Mono',monospace;color:${progColor(p)};min-width:32px;text-align:right">${p}%</span>
+        ${prev?`<span style="font-size:.6rem;min-width:36px;text-align:right;color:${s.torreProgs[ti]-prev.torreProgs[ti]>0?'var(--green)':s.torreProgs[ti]-prev.torreProgs[ti]<0?'var(--red)':'var(--muted)'}">${s.torreProgs[ti]-prev.torreProgs[ti]>0?'+':''}${s.torreProgs[ti]-prev.torreProgs[ti]}%</span>`:''}
+      </div>`).join('');
+
+    // Barras por actividad inline
+    const actBars=s.actAvgs.map((p,ai)=>`
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+        <span style="font-size:.6rem;color:var(--muted);min-width:62px;text-align:right">${ACTS[ai]}</span>
+        <div style="flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${p}%;background:${progColor(p)};border-radius:3px"></div>
+        </div>
+        <span style="font-size:.62rem;font-family:'DM Mono',monospace;color:${progColor(p)};min-width:30px;text-align:right">${p}%</span>
+        ${prev?`<span style="font-size:.58rem;min-width:32px;text-align:right;color:${s.actAvgs[ai]-prev.actAvgs[ai]>0?'var(--green)':s.actAvgs[ai]-prev.actAvgs[ai]<0?'var(--red)':'var(--muted)'}">${s.actAvgs[ai]-prev.actAvgs[ai]>0?'+':''}${s.actAvgs[ai]-prev.actAvgs[ai]}%</span>`:''}
+      </div>`).join('');
+
+    // Distribución estado obra
+    const total=s.entregados+s.limpieza+s.proceso;
+    const pEnt=Math.round(s.entregados/total*100);
+    const pLim=Math.round(s.limpieza/total*100);
+    const pPro=Math.round(s.proceso/total*100);
+
+    return `<div class="snapshot-card" id="snap-card-${i}">
+      <div class="snapshot-card-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px">
+        <div>
+          <div class="snapshot-date">${s.date}</div>
+          <div class="snapshot-label">${s.label}</div>
+          ${s.notes?`<div class="snapshot-meta" style="margin-top:3px">${s.notes}</div>`:''}
+        </div>
+        <div style="display:flex;gap:6px;align-items:flex-start;flex-shrink:0">
+          <button onclick="toggleSnapDetail(${i})" style="background:#1c2030;border:1.5px solid #4f9cf9;color:#4f9cf9;border-radius:6px;padding:6px 12px;font-size:.73rem;font-weight:700;cursor:pointer;font-family:sans-serif">📊 Dashboard</button>
+          <button onclick="printSnapshotDetail(${i})" style="background:#1c2030;border:1.5px solid #5a6180;color:#c8ccd8;border-radius:6px;padding:6px 12px;font-size:.73rem;font-weight:700;cursor:pointer;font-family:sans-serif">🖨 PDF</button>
+          <button onclick="promptDelete(${i})" style="background:#1c2030;border:1.5px solid rgba(239,68,68,.5);color:#ef4444;border-radius:6px;padding:6px 8px;font-size:.73rem;font-weight:700;cursor:pointer;font-family:sans-serif">✕</button>
+        </div>
+      </div>
+
+      <!-- KPIs rápidos -->
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px">
+        <span class="snap-stat">Progreso: <strong style="color:${progColor(s.progAvg)}">${s.progAvg}%</strong></span>
+        <span class="snap-stat">Entregados: <strong>${s.entregados}</strong></span>
+        <span class="snap-stat">Limpieza: <strong>${s.limpieza}</strong></span>
+        <span class="snap-stat">En proceso: <strong>${s.proceso}</strong></span>
+        <span class="snap-stat">Vendidos: <strong>${s.vendidos}</strong></span>
+      </div>
+
+      <!-- Barra de distribución estados -->
+      <div style="height:6px;border-radius:3px;overflow:hidden;display:flex;margin-bottom:${progDiff!==null?'8px':'0'}">
+        <div style="width:${pEnt}%;background:#3b82f6"></div>
+        <div style="width:${pLim}%;background:#a855f7"></div>
+        <div style="width:${pPro}%;background:#f97316"></div>
+      </div>
+
+      ${progDiff!==null?`<div class="snapshot-diff">
+        <span class="diff-chip ${progDiff>0?'diff-up':progDiff<0?'diff-dn':'diff-eq'}">${progDiff>0?'+':''}${progDiff}% progreso</span>
+        ${entDiff!==0?`<span class="diff-chip ${entDiff>0?'diff-up':'diff-dn'}">${entDiff>0?'+':''}${entDiff} entregados</span>`:''}
+        ${limDiff!==0?`<span class="diff-chip ${limDiff>0?'diff-up':'diff-dn'}">${limDiff>0?'+':''}${limDiff} limpieza</span>`:''}
+        ${proDiff!==0?`<span class="diff-chip ${proDiff<0?'diff-up':'diff-dn'}">${proDiff>0?'+':''}${proDiff} proceso</span>`:''}
+      </div>`:''}
+
+      <!-- Dashboard expandible -->
+      <div id="snap-detail-${i}" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <!-- Torres -->
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
+            <div style="font-size:.72rem;font-weight:600;color:var(--muted);margin-bottom:10px">
+              Progreso por torre ${prev?'<span style="font-size:.6rem;color:var(--muted)">(Δ vs anterior)</span>':''}
+            </div>
+            ${torresBars}
+          </div>
+          <!-- Estado obra + ventas -->
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
+            <div style="font-size:.72rem;font-weight:600;color:var(--muted);margin-bottom:10px">Distribución de estado</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              ${[
+                {label:'Entregados',val:s.entregados,pct:pEnt,color:'#3b82f6'},
+                {label:'Limpieza final',val:s.limpieza,pct:pLim,color:'#a855f7'},
+                {label:'En proceso',val:s.proceso,pct:pPro,color:'#f97316'},
+              ].map(r=>`<div>
+                <div style="display:flex;justify-content:space-between;font-size:.65rem;color:var(--muted);margin-bottom:3px">
+                  <span>${r.label}</span><span style="font-family:'DM Mono',monospace;color:var(--text)">${r.val} · ${r.pct}%</span>
+                </div>
+                <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+                  <div style="height:100%;width:${r.pct}%;background:${r.color};border-radius:3px"></div>
+                </div>
+              </div>`).join('')}
+              <div style="margin-top:6px;padding-top:8px;border-top:1px solid var(--border)">
+                <div style="display:flex;justify-content:space-between;font-size:.65rem;color:var(--muted);margin-bottom:3px">
+                  <span>Vendidos</span><span style="font-family:'DM Mono',monospace;color:var(--text)">${s.vendidos} · ${Math.round(s.vendidos/s.total*100)}%</span>
+                </div>
+                <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+                  <div style="height:100%;width:${Math.round(s.vendidos/s.total*100)}%;background:#0f6e56;border-radius:3px"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Actividades — ancho completo -->
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:12px">
+          <div style="font-size:.72rem;font-weight:600;color:var(--muted);margin-bottom:10px">
+            Avance por actividad ${prev?'<span style="font-size:.6rem;color:var(--muted)">(Δ vs anterior)</span>':''}
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 24px">
+            ${actBars}
+          </div>
+        </div>
+
+        <!-- Detalle por torre + nivel de avance -->
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:12px">
+          <div style="font-size:.72rem;font-weight:600;color:var(--muted);margin-bottom:10px">Nivel de avance detallado por torre y actividad</div>
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:.63rem">
+              <thead>
+                <tr>
+                  <th style="padding:5px 8px;text-align:left;color:var(--muted);border-bottom:1px solid var(--border);font-weight:600">Torre</th>
+                  <th style="padding:5px 8px;text-align:center;color:var(--muted);border-bottom:1px solid var(--border);font-weight:600">Prog.</th>
+                  ${ACTS.map(a=>`<th style="padding:5px 4px;text-align:center;color:var(--muted);border-bottom:1px solid var(--border);font-weight:600;white-space:nowrap">${a.substring(0,3)}</th>`).join('')}
+                </tr>
+              </thead>
+              <tbody>
+                ${s.torreProgs.map((p,ti)=>{
+                  const tActAvgs=(s.torreActAvgs&&s.torreActAvgs[ti])?s.torreActAvgs[ti]:s.actAvgs;
+                  return `<tr>
+                    <td style="padding:5px 8px;color:${T_COLORS_SNAP[ti]};font-weight:600">Torre ${ti+1}</td>
+                    <td style="padding:5px 8px;text-align:center;font-family:'DM Mono',monospace;color:${progColor(p)};font-weight:600">${p}%</td>
+                    ${tActAvgs.map(v=>`<td style="padding:5px 4px;text-align:center;font-family:'DM Mono',monospace;color:${v>=100?'var(--green)':v>=75?'var(--accent)':v>=50?'var(--yellow)':v>0?'var(--orange)':'var(--muted)'}">${v>=100?'✓':v>0?v+'%':'—'}</td>`).join('')}
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>`; } catch(e){ return `<div class="snapshot-card"><div style="color:var(--red);font-size:.75rem">Error al renderizar snapshot ${i+1}: ${e.message}</div></div>`; }
+  }).join('');
+}
+
+function toggleSnapDetail(i){
+  const el=document.getElementById('snap-detail-'+i);
+  const isOpen=el.style.display!=='none';
+  el.style.display=isOpen?'none':'block';
+}
+
+function printSnapshotDetail(idx){
+  const snaps=loadSnapshots();
+  const s=snaps[idx];
+  const prev=snaps[idx+1];
+
+  const torreRows=s.torreProgs.map((p,ti)=>{
+    const tActAvgs=(s.torreActAvgs&&s.torreActAvgs[ti])?s.torreActAvgs[ti]:s.actAvgs;
+    const diff=prev?s.torreProgs[ti]-prev.torreProgs[ti]:null;
+    return `<tr>
+      <td style="font-weight:600;color:${['#185FA5','#534AB7','#0F6E56','#BA7517','#D85A30'][ti]}">Torre ${ti+1}</td>
+      <td style="font-weight:700;color:${p>=100?'#16a34a':p>=75?'#1d4ed8':p>=50?'#ca8a04':'#dc2626'}">${p}%</td>
+      <td style="color:${diff===null?'#94a3b8':diff>0?'#16a34a':diff<0?'#dc2626':'#94a3b8'}">${diff===null?'—':diff>0?'+'+diff+'%':diff+'%'}</td>
+      ${tActAvgs.map(v=>`<td style="text-align:center;color:${v>=100?'#16a34a':v>=75?'#1d4ed8':v>=50?'#ca8a04':v>0?'#ea580c':'#94a3b8'}">${v>=100?'✓':v>0?v+'%':'—'}</td>`).join('')}
+    </tr>`;}).join('');
+
+  const actRows=s.actAvgs.map((v,ai)=>{
+    const diff=prev?v-prev.actAvgs[ai]:null;
+    return `<tr><td>${ACTS[ai]}</td>
+      <td style="font-weight:700;color:${v>=100?'#16a34a':v>=75?'#1d4ed8':v>=50?'#ca8a04':'#dc2626'}">${v}%</td>
+      <td style="color:${diff===null?'#94a3b8':diff>0?'#16a34a':diff<0?'#dc2626':'#94a3b8'}">${diff===null?'—':diff>0?'+'+diff+'%':diff+'%'}</td>
+      <td style="background:#f1f5f9;border-radius:3px;padding:4px 0">
+        <div style="height:8px;background:${v>=100?'#16a34a':v>=75?'#1d4ed8':v>=50?'#ca8a04':v>0?'#ea580c':'#e2e8f0'};width:${v}%;border-radius:3px"></div>
+      </td>
+    </tr>`;}).join('');
+
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Snapshot ${s.date}</title>
+    <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,sans-serif;font-size:11px;color:#1e293b;padding:24px;max-width:1100px;margin:auto}
+    h1{font-size:18px;font-weight:700;margin-bottom:3px}
+    .sub{font-size:11px;color:#64748b;margin-bottom:18px}
+    h2{font-size:13px;font-weight:700;margin:18px 0 8px;color:#1e293b;border-bottom:1px solid #e2e8f0;padding-bottom:4px}
+    .kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}
+    .kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:10px 12px}
+    .kpi-label{font-size:10px;color:#64748b}
+    .kpi-val{font-size:22px;font-weight:700;margin-top:2px}
+    .diff-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+    .diff-chip{font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600}
+    .up{background:#dcfce7;color:#15803d}.dn{background:#fee2e2;color:#dc2626}.eq{background:#f1f5f9;color:#64748b}
+    table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:18px}
+    th{background:#1e293b;color:#fff;padding:5px 6px;text-align:left;font-size:9px;letter-spacing:.03em}
+    td{padding:4px 6px;border-bottom:1px solid #e2e8f0;vertical-align:middle}
+    .bar-cell{width:120px}
+    .prog-bar{height:7px;border-radius:3px}
+    @page{margin:1.2cm;size:A3 landscape}
+    @media print{body{padding:0}}
+    </style>
+  </head><body>
+    <h1>📸 ${s.label}</h1>
+    <p class="sub">Snapshot del ${s.date}${s.notes?' · '+s.notes:''} ${prev?'· Comparado con: '+prev.label+' ('+prev.date+')':''}</p>
+
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-label">Progreso promedio</div><div class="kpi-val" style="color:#1d4ed8">${s.progAvg}%</div></div>
+      <div class="kpi"><div class="kpi-label">Entregados</div><div class="kpi-val" style="color:#16a34a">${s.entregados}</div></div>
+      <div class="kpi"><div class="kpi-label">Limpieza final</div><div class="kpi-val" style="color:#9333ea">${s.limpieza}</div></div>
+      <div class="kpi"><div class="kpi-label">En proceso</div><div class="kpi-val" style="color:#ea580c">${s.proceso}</div></div>
+      <div class="kpi"><div class="kpi-label">Vendidos</div><div class="kpi-val" style="color:#0891b2">${s.vendidos}</div></div>
+    </div>
+
+    ${prev?`<div class="diff-row">
+      <span class="diff-chip ${s.progAvg-prev.progAvg>0?'up':s.progAvg-prev.progAvg<0?'dn':'eq'}">${s.progAvg-prev.progAvg>0?'+':''}${s.progAvg-prev.progAvg}% progreso</span>
+      <span class="diff-chip ${s.entregados-prev.entregados>0?'up':s.entregados-prev.entregados<0?'dn':'eq'}">${s.entregados-prev.entregados>0?'+':''}${s.entregados-prev.entregados} entregados</span>
+      <span class="diff-chip ${s.limpieza-prev.limpieza>0?'up':s.limpieza-prev.limpieza<0?'dn':'eq'}">${s.limpieza-prev.limpieza>0?'+':''}${s.limpieza-prev.limpieza} limpieza</span>
+      <span class="diff-chip ${s.proceso-prev.proceso<0?'up':s.proceso-prev.proceso>0?'dn':'eq'}">${s.proceso-prev.proceso>0?'+':''}${s.proceso-prev.proceso} en proceso</span>
+    </div>`:''} 
+
+    <h2>Progreso por torre y actividad</h2>
+    <table>
+      <thead><tr>
+        <th>Torre</th><th>Progreso</th><th>Δ vs anterior</th>
+        ${ACTS.map(a=>`<th>${a.substring(0,3)}</th>`).join('')}
+      </tr></thead>
+      <tbody>${torreRows}</tbody>
+    </table>
+
+    <h2>Avance por actividad</h2>
+    <table>
+      <thead><tr><th>Actividad</th><th>Promedio</th><th>Δ vs anterior</th><th class="bar-cell">Barra</th></tr></thead>
+      <tbody>${actRows}</tbody>
+    </table>
+    <script>window.onload=()=>window.print();<\/script>
+  </body></html>`);
+  w.document.close();
+}
+
+function promptDelete(idx){deleteSnapIdx=idx;document.getElementById('delModal').classList.add('open');}
+function confirmDelete(){
+  if(deleteSnapIdx===null)return;
+  const snaps=loadSnapshots();
+  snaps.splice(deleteSnapIdx,1);
+  saveSnapshots(snaps);
+  deleteSnapIdx=null;
+  document.getElementById('delModal').classList.remove('open');
+  renderSnapshots();
+}
+
+function exportSnapshotExcel(){
+  const snaps=loadSnapshots();
+  if(!snaps.length){alert('No hay snapshots guardados.');return;}
+  const ws_data=[['Fecha','Etiqueta','Progreso %','Entregados','Limpieza','En proceso','Vendidos','Con fecha entrega',...ACTS.map(a=>'Act: '+a)]];
+  snaps.forEach(s=>ws_data.push([s.date,s.label,s.progAvg,s.entregados,s.limpieza,s.proceso,s.vendidos,s.conFecha,...s.actAvgs]));
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet(ws_data);
+  ws['!cols']=[{wch:12},{wch:20},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:16},...ACTS.map(()=>({wch:14}))];
+  XLSX.utils.book_append_sheet(wb,ws,'Historial Snapshots');
+  XLSX.writeFile(wb,`Historial_Snapshots_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+
+// ─────────────────────────────────────────────────────────────────────
+// TORRE 5
+// ─────────────────────────────────────────────────────────────────────
+let t5EditMode = false;
+
+function getTorre5() { return apartments.filter(a => a.torre === 5); }
+
+function getPisos() {
+  const pisos = [...new Set(getTorre5().map(a => Math.floor(a.apto / 100)))].sort((a,b)=>a-b);
+  return pisos;
+}
+
+function renderTorre5() {
+  const t5 = getTorre5();
+  if (!t5.length) return;
+
+  // Update act headers
+  ACTS.forEach((name, i) => {
+    const th = document.getElementById('t5-act-th-' + i);
+    if (th) { th.title = name; th.textContent = name.substring(0,2).toUpperCase(); }
+  });
+
+  // ── KPIs
+  const total = t5.length;
+  const progAvg = Math.round(t5.reduce((s,a) => s+a.progreso, 0) / total);
+  const completos = t5.filter(a => a.progreso === 100).length;
+  const conFechaObra = t5.filter(a => a.fechaEntregaObra).length;
+  const gapCrit = t5.filter(a => gapAlert(a.fechaEntregaObra, a.fechaEntregaComercial) === 'gap-critico').length;
+  const vencidos = t5.filter(a => alertClass(a.fechaEntregaObra, a.progreso) === 'vencido').length;
+  const riesgo = t5.filter(a => alertClass(a.fechaEntregaObra, a.progreso) === 'riesgo').length;
+  const vendidos = t5.filter(a => a.estadoVentas === 'Vendido').length;
+  const disponibles = t5.filter(a => a.estadoVentas === 'Disponible').length;
+
+  document.getElementById('t5-subtitle').textContent =
+    `${total} apartamentos · ${conFechaObra} con fecha obra · Datos al 08-06-2026 · Actualizado ${new Date().toLocaleTimeString('es-GT',{hour:'2-digit',minute:'2-digit'})}`;
+
+  document.getElementById('t5-kpis').innerHTML = [
+    {label:'Progreso prom.', val:progAvg+'%', color:progColor(progAvg), sub:`${completos} al 100%`},
+    {label:'Vendidos', val:vendidos, color:'#4f9cf9', sub:`${disponibles} disponibles`},
+    {label:'Con fecha obra', val:conFechaObra, color:'#14b8a6', sub:`de ${total} aptos`},
+    {label:'Gap crítico', val:gapCrit, color: gapCrit?'#ef4444':'#22c55e', sub:'<3 semanas'},
+    {label:'Vencidos obra', val:vencidos, color: vencidos?'#ef4444':'#22c55e', sub:''},
+    {label:'En riesgo', val:riesgo, color: riesgo?'#f97316':'#22c55e', sub:''},
+  ].map(k => `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+    <div style="font-size:.68rem;color:var(--muted);margin-bottom:3px">${k.label}</div>
+    <div style="font-size:1.5rem;font-weight:700;color:${k.color};font-family:'DM Mono',monospace">${k.val}</div>
+    ${k.sub?`<div style="font-size:.63rem;color:var(--muted);margin-top:2px">${k.sub}</div>`:''}
+  </div>`).join('');
+
+  // ── Niveles (pisos)
+  const pisos = getPisos();
+  document.getElementById('t5-fPiso').innerHTML =
+    '<option value="">Todos los pisos</option>' +
+    pisos.map(p => `<option value="${p}">Piso ${p}00</option>`).join('');
+
+  document.getElementById('t5-fVentas').innerHTML =
+    '<option value="">Todas ventas</option>' +
+    VENTAS_OPTS.map(o => `<option value="${o}">${o}</option>`).join('');
+
+  document.getElementById('t5-fObra').innerHTML =
+    '<option value="">Todos estados</option>' +
+    OBRA_OPTS.map(o => `<option value="${o}">${o}</option>`).join('');
+
+  const nivelData = pisos.map(p => {
+    const apts = t5.filter(a => Math.floor(a.apto/100) === p);
+    const avg = Math.round(apts.reduce((s,a) => s+a.progreso, 0) / apts.length);
+    const done = apts.filter(a => a.progreso === 100).length;
+    const gc = apts.filter(a => gapAlert(a.fechaEntregaObra, a.fechaEntregaComercial) === 'gap-critico').length;
+    return {p, apts: apts.length, avg, done, gc};
+  });
+
+  document.getElementById('t5-niveles').innerHTML = nivelData.map(n => `
+    <div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-size:.72rem;font-weight:600;color:var(--text)">Piso ${n.p}00</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${n.gc ? `<span style="font-size:.6rem;background:rgba(239,68,68,.15);color:var(--red);border-radius:3px;padding:1px 5px;font-weight:600">⚠ ${n.gc} gap</span>` : ''}
+          <span style="font-size:.68rem;font-family:'DM Mono',monospace;color:${progColor(n.avg)}">${n.avg}%</span>
+          <span style="font-size:.62rem;color:var(--muted)">${n.done}/${n.apts}</span>
+        </div>
+      </div>
+      <div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${n.avg}%;background:${progColor(n.avg)};border-radius:4px;transition:width .4s"></div>
+      </div>
+    </div>`).join('');
+
+  // ── Actividades
+  const actData = ACTS.map((name,i) => {
+    const avg = Math.round(t5.reduce((s,a) => s+a.acts[i], 0) / t5.length * 100);
+    const pending = t5.filter(a => a.acts[i] < 1).length;
+    return {name, avg, pending};
+  });
+
+  document.getElementById('t5-actividades').innerHTML = actData.map(a => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="font-size:.65rem;color:var(--muted);min-width:66px;text-align:right">${a.name}</span>
+      <div style="flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${a.avg}%;background:${progColor(a.avg)};border-radius:3px"></div>
+      </div>
+      <span style="font-size:.63rem;font-family:'DM Mono',monospace;color:${progColor(a.avg)};min-width:28px">${a.avg}%</span>
+      <span style="font-size:.6rem;color:var(--muted);min-width:40px">${a.pending} pend.</span>
+    </div>`).join('');
+
+  // ── Alertas panel
+  const alertas = [];
+  t5.filter(a => gapAlert(a.fechaEntregaObra,a.fechaEntregaComercial)==='gap-critico')
+    .forEach(a => {
+      const g = gapDays(a.fechaEntregaObra, a.fechaEntregaComercial);
+      alertas.push(`<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid rgba(239,68,68,.1);font-size:.72rem">
+        <span style="background:rgba(239,68,68,.15);color:var(--red);border-radius:3px;padding:2px 7px;font-size:.65rem;font-weight:700;white-space:nowrap">GAP CRÍTICO</span>
+        <strong>${a.idObra}</strong>
+        <span style="color:var(--muted)">Obra: ${a.fechaEntregaObra||'—'}</span>
+        <span style="color:var(--muted)">→ Comercial: ${a.fechaEntregaComercial||'—'}</span>
+        <span style="color:var(--red);font-family:'DM Mono',monospace">${g===null?'sin fechas':g<0?'obra DESPUÉS de comercial':'solo '+g+'d (mín 21)'}</span>
+      </div>`);
+    });
+  t5.filter(a => alertClass(a.fechaEntregaObra,a.progreso)==='vencido')
+    .forEach(a => alertas.push(`<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid rgba(239,68,68,.1);font-size:.72rem">
+      <span style="background:rgba(239,68,68,.15);color:var(--red);border-radius:3px;padding:2px 7px;font-size:.65rem;font-weight:700">VENCIDO</span>
+      <strong>${a.idObra}</strong> · ${a.progreso}% · <span style="color:var(--red)">${Math.abs(getDays(a.fechaEntregaObra))}d vencido</span>
+    </div>`));
+  t5.filter(a => gapAlert(a.fechaEntregaObra,a.fechaEntregaComercial)==='gap-riesgo')
+    .forEach(a => {
+      const g = gapDays(a.fechaEntregaObra, a.fechaEntregaComercial);
+      alertas.push(`<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid rgba(234,179,8,.1);font-size:.72rem">
+        <span style="background:rgba(234,179,8,.15);color:var(--yellow);border-radius:3px;padding:2px 7px;font-size:.65rem;font-weight:700;white-space:nowrap">GAP AJUSTADO</span>
+        <strong>${a.idObra}</strong> · ${g}d de margen
+      </div>`);
+    });
+
+  const alertDiv = document.getElementById('t5-alertas');
+  if (alertas.length) {
+    alertDiv.innerHTML = `<div style="background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.2);border-radius:8px;overflow:hidden">
+      <div style="padding:9px 14px;font-size:.75rem;font-weight:700;color:var(--red);border-bottom:1px solid rgba(239,68,68,.15)">
+        ⚠️ ${alertas.length} alertas en Torre 5
+      </div>
+      ${alertas.join('')}
+    </div>`;
+  } else {
+    alertDiv.innerHTML = `<div style="background:rgba(34,197,94,.05);border:1px solid rgba(34,197,94,.15);border-radius:8px;padding:10px 14px;font-size:.75rem;color:var(--green)">✅ Sin alertas activas en Torre 5</div>`;
+  }
+
+  renderT5Vendidos();
+  renderT5Table();
+}
+
+function renderT5Table() {
+  const piso = document.getElementById('t5-fPiso').value;
+  const ventas = document.getElementById('t5-fVentas').value;
+  const obra = document.getElementById('t5-fObra').value;
+  const alerta = document.getElementById('t5-fAlerta').value;
+  const search = document.getElementById('t5-fSearch').value.toLowerCase();
+
+  let t5 = getTorre5().filter(a => {
+    if (piso && Math.floor(a.apto/100) != piso) return false;
+    if (ventas && a.estadoVentas !== ventas) return false;
+    if (obra && a.estadoObra !== obra) return false;
+    if (alerta === 'gap' && gapAlert(a.fechaEntregaObra,a.fechaEntregaComercial) !== 'gap-critico') return false;
+    if (alerta === 'incompleto' && a.progreso >= 100) return false;
+    if (alerta === 'sin_fecha' && a.fechaEntregaObra) return false;
+    if (search && !a.idObra.toLowerCase().includes(search) && !String(a.apto).includes(search)) return false;
+    return true;
+  });
+
+  document.getElementById('t5-empty').style.display = t5.length ? 'none' : 'block';
+
+  const tbody = document.getElementById('t5-body');
+  tbody.innerHTML = t5.map(a => {
+    const al = alertClass(a.fechaEntregaObra, a.progreso);
+    const alC = alertClass(a.fechaEntregaComercial, a.progreso);
+    const gapAl = gapAlert(a.fechaEntregaObra, a.fechaEntregaComercial);
+    const gapD = gapDays(a.fechaEntregaObra, a.fechaEntregaComercial);
+    const daysObra = a.fechaEntregaObra ? getDays(a.fechaEntregaObra) : null;
+
+    const rowBg = gapAl==='gap-critico'||al==='vencido' ? 'background:rgba(239,68,68,.04)' :
+                  gapAl==='gap-riesgo' ? 'background:rgba(234,179,8,.03)' : '';
+
+    const actCells = a.acts.map((v,i) => t5EditMode
+      ? `<td style="padding:5px 3px"><input type="number" min="0" max="1" step="0.25" value="${v}"
+          onchange="updateApt(${a.id},'act','${i}:'+this.value);renderTorre5()"
+          style="width:46px;text-align:center;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:2px 4px;font-size:.68rem"></td>`
+      : `<td style="text-align:center;padding:5px 3px"><span class="act-cell ${actClass(v)}" title="${ACTS[i]}">${actLabel(v)}</span></td>`
+    ).join('');
+
+    const gapBadge = gapAl
+      ? `<span class="gap-chip ${gapAl}">${gapD===null?'—':gapD<0?'⚠inv':gapD+'d'}</span>`
+      : (gapD!==null ? `<span class="gap-chip gap-ok">${gapD}d</span>` : '—');
+
+    const daysBadge = daysObra!==null
+      ? `<span class="days-badge db-${al||'ok'}">${daysObra<0?Math.abs(daysObra)+'d venc':daysObra+'d'}</span>` : '';
+
+    return `<tr style="${rowBg}">
+      <td style="padding:8px 10px"><span class="apt-id">${a.idObra}</span></td>
+      <td style="padding:8px 10px;font-family:'DM Mono',monospace">${a.apto}</td>
+      <td style="padding:8px 10px;font-size:.7rem">${a.tipo}</td>
+      <td style="padding:8px 6px">${t5EditMode
+        ? `<select class="cell-edit" onchange="updateApt(${a.id},'estadoVentas',this.value);renderTorre5()">${VENTAS_OPTS.map(o=>`<option${o===a.estadoVentas?' selected':''}>${o}</option>`).join('')}</select>`
+        : `<span class="ventas-chip ${ventasClass(a.estadoVentas)}">${a.estadoVentas}</span>`}
+      </td>
+      <td style="padding:8px 6px">${t5EditMode
+        ? `<select class="cell-edit" style="min-width:150px" onchange="updateApt(${a.id},'estadoObra',this.value);renderTorre5()">${OBRA_OPTS.map(o=>`<option${o===a.estadoObra?' selected':''}>${o}</option>`).join('')}</select>`
+        : `<span class="obra-chip ${obraClass(a.estadoObra)}">${a.estadoObra}</span>`}
+      </td>
+      <td style="padding:8px 10px">
+        <div style="display:flex;align-items:center;gap:6px;min-width:100px">
+          <div style="flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${a.progreso}%;background:${progColor(a.progreso)};border-radius:3px"></div>
+          </div>
+          <span style="font-family:'DM Mono',monospace;font-size:.65rem;color:${progColor(a.progreso)};min-width:28px">${a.progreso}%</span>
+        </div>
+      </td>
+      ${actCells}
+      <td style="padding:8px 6px"><input type="date" class="date-input${alC?' '+alC:''}"
+        value="${a.fechaEntregaComercial||''}"
+        onchange="updateApt(${a.id},'fechaEntregaComercial',this.value);renderTorre5()"
+        style="width:110px"></td>
+      <td style="padding:8px 6px"><input type="date" class="date-input${al?' '+al:''}"
+        value="${a.fechaEntregaObra||''}"
+        onchange="updateApt(${a.id},'fechaEntregaObra',this.value);renderTorre5()"
+        style="width:110px"></td>
+      <td style="padding:8px 6px;text-align:center">${gapBadge}</td>
+      <td style="padding:8px 6px">${daysBadge}</td>
+    </tr>`;
+  }).join('');
+}
+
+function resetT5Filters() {
+  ['t5-fPiso','t5-fVentas','t5-fObra','t5-fAlerta'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('t5-fSearch').value='';
+  renderT5Table();
+}
+
+function toggleT5Edit(on) {
+  t5EditMode = on;
+  document.getElementById('t5-edit-bar').style.display = on ? 'flex' : 'none';
+  document.getElementById('t5-editBtn').style.display = on ? 'none' : '';
+  renderT5Table();
+}
+
+function _t5VendidosCollapsed(){ return localStorage.getItem('t5_v_collapsed')==='1'; }
+
+function toggleVendidosCollapse(){
+  const c = !_t5VendidosCollapsed();
+  localStorage.setItem('t5_v_collapsed', c?'1':'0');
+  document.getElementById('t5-v-toggle').textContent = c ? '▶ Expandir' : '▼ Colapsar';
+  document.getElementById('t5-vendidos-body').style.display = c ? 'none' : 'block';
+}
+
+function renderT5Vendidos(){
+  const sortVal = document.getElementById('t5-v-sort') ? document.getElementById('t5-v-sort').value : 'apto';
+  let vendidos = getTorre5().filter(a => a.estadoVentas === 'Vendido');
+
+  if(sortVal === 'prog_asc')  vendidos.sort((a,b) => a.progreso - b.progreso);
+  else if(sortVal === 'prog_desc') vendidos.sort((a,b) => b.progreso - a.progreso);
+  else if(sortVal === 'piso') vendidos.sort((a,b) => a.apto - b.apto);
+  else vendidos.sort((a,b) => a.apto - b.apto);
+
+  const countEl = document.getElementById('t5-vendidos-count');
+  if(countEl){
+    const avgProg = vendidos.length ? Math.round(vendidos.reduce((s,a)=>s+a.progreso,0)/vendidos.length) : 0;
+    countEl.textContent = `${vendidos.length} aptos · prom. ${avgProg}%`;
+  }
+
+  const body = document.getElementById('t5-vendidos-body');
+  if(!body) return;
+
+  // Restore collapse state
+  const collapsed = _t5VendidosCollapsed();
+  body.style.display = collapsed ? 'none' : 'block';
+  const toggleBtn = document.getElementById('t5-v-toggle');
+  if(toggleBtn) toggleBtn.textContent = collapsed ? '▶ Expandir' : '▼ Colapsar';
+
+  // Group by piso for section headers
+  const byPiso = {};
+  vendidos.forEach(a => {
+    const p = Math.floor(a.apto / 100);
+    if(!byPiso[p]) byPiso[p] = [];
+    byPiso[p].push(a);
+  });
+
+  const pisos = Object.keys(byPiso).map(Number).sort((a,b)=>a-b);
+
+  body.innerHTML = pisos.map(p => {
+    const apts = byPiso[p];
+    const pisoProg = Math.round(apts.reduce((s,a)=>s+a.progreso,0)/apts.length);
+    const pisoGapCrit = apts.filter(a=>gapAlert(a.fechaEntregaObra,a.fechaEntregaComercial)==='gap-critico').length;
+
+    const cards = apts.map(a => {
+      const al = alertClass(a.fechaEntregaObra, a.progreso);
+      const gapAl = gapAlert(a.fechaEntregaObra, a.fechaEntregaComercial);
+      const gapD = gapDays(a.fechaEntregaObra, a.fechaEntregaComercial);
+      const daysObra = a.fechaEntregaObra ? getDays(a.fechaEntregaObra) : null;
+
+      // Border color by alert priority
+      const borderColor = gapAl==='gap-critico'||al==='vencido' ? '#ef4444' :
+                          gapAl==='gap-riesgo'||al==='riesgo'   ? '#eab308' : 'var(--border)';
+
+      // Activity mini-bars (12 acts in 2 rows of 6)
+      const actMini = a.acts.map((v,i) => {
+        const col = v>=1?'#22c55e':v>=0.75?'#4f9cf9':v>=0.5?'#eab308':v>0?'#f97316':'rgba(255,255,255,.08)';
+        return `<div title="${ACTS[i]}: ${Math.round(v*100)}%" style="flex:1;height:6px;background:${col};border-radius:1px"></div>`;
+      }).join('');
+
+      // Date info
+      const fechaInfo = a.fechaEntregaComercial
+        ? `<span style="font-size:.6rem;color:var(--muted)">Comercial: <span style="color:${al==='vencido'?'var(--red)':al==='riesgo'?'var(--orange)':'var(--text)'}">${a.fechaEntregaComercial}</span></span>`
+        : `<span style="font-size:.6rem;color:var(--muted);font-style:italic">Sin fecha comercial</span>`;
+
+      const gapInfo = gapD !== null
+        ? `<span class="gap-chip ${gapAl||'gap-ok'}" style="font-size:.58rem;padding:1px 5px">${gapD}d gap</span>`
+        : '';
+
+      const daysInfo = daysObra !== null
+        ? `<span class="days-badge db-${al||'ok'}" style="font-size:.6rem">${daysObra<0?Math.abs(daysObra)+'d venc':daysObra+'d'}</span>`
+        : '';
+
+      return `<div style="background:var(--surface2);border:1px solid ${borderColor};border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;transition:border-color .15s">
+        <!-- Header -->
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px">
+          <div>
+            <div style="font-family:'DM Mono',monospace;font-size:.82rem;font-weight:500;color:var(--accent)">${a.idObra}</div>
+            <div style="font-size:.65rem;color:var(--muted);margin-top:1px">${a.tipo}</div>
+          </div>
+          <div style="font-size:1.3rem;font-weight:700;color:${progColor(a.progreso)};font-family:'DM Mono',monospace;line-height:1">${a.progreso}%</div>
+        </div>
+        <!-- Progress bar -->
+        <div>
+          <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:5px">
+            <div style="height:100%;width:${a.progreso}%;background:${progColor(a.progreso)};border-radius:3px;transition:width .4s"></div>
+          </div>
+          <!-- Activity mini bars -->
+          <div style="display:flex;gap:2px">${actMini}</div>
+        </div>
+        <!-- Estado obra -->
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;flex-wrap:wrap">
+          <span class="obra-chip ${obraClass(a.estadoObra)}" style="font-size:.6rem">${a.estadoObra}</span>
+          <div style="display:flex;gap:4px;align-items:center">${gapInfo}${daysInfo}</div>
+        </div>
+        <!-- Fecha -->
+        <div>${fechaInfo}</div>
+      </div>`;
+    }).join('');
+
+    return `
+      <div style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">
+          <span style="font-size:.72rem;font-weight:700;color:#f97316">Piso ${p}00</span>
+          <div style="flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+            <div style="height:100%;width:${pisoProg}%;background:${progColor(pisoProg)};border-radius:2px"></div>
+          </div>
+          <span style="font-size:.68rem;font-family:'DM Mono',monospace;color:${progColor(pisoProg)}">${pisoProg}%</span>
+          <span style="font-size:.63rem;color:var(--muted)">${apts.length} vendidos</span>
+          ${pisoGapCrit ? `<span style="font-size:.63rem;background:rgba(239,68,68,.15);color:var(--red);border-radius:3px;padding:1px 6px;font-weight:600">⚠ ${pisoGapCrit} gap crítico</span>` : ''}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
+          ${cards}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function exportTorre5Excel() {
+  const t5 = getTorre5();
+  const rows = [['ID Obra','Apto','Tipo','Est.Ventas','Est.Obra','Progreso %',...ACTS,'F.Comercial','F.Obra','Gap días','Estado Gap','Días restantes']];
+  t5.forEach(a => {
+    const g = gapDays(a.fechaEntregaObra, a.fechaEntregaComercial);
+    const gs = gapAlert(a.fechaEntregaObra,a.fechaEntregaComercial)==='gap-critico'?'CRÍTICO':gapAlert(a.fechaEntregaObra,a.fechaEntregaComercial)==='gap-riesgo'?'AJUSTADO':g!==null?'OK':'';
+    rows.push([a.idObra,a.apto,a.tipo,a.estadoVentas,a.estadoObra,a.progreso,...a.acts.map(v=>Math.round(v*100)+'%'),a.fechaEntregaComercial||'',a.fechaEntregaObra||'',g!==null?g:'',gs,a.fechaEntregaObra?getDays(a.fechaEntregaObra):'']);
+  });
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:10},{wch:6},{wch:8},{wch:12},{wch:20},{wch:8},...ACTS.map(()=>({wch:5})),{wch:14},{wch:14},{wch:8},{wch:10},{wch:10}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Torre 5');
+  XLSX.writeFile(wb, `Torre5_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+function exportTorre5PDF() {
+  const t5 = getTorre5();
+  const today = new Date().toLocaleDateString('es-GT',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  const progAvg = Math.round(t5.reduce((s,a)=>s+a.progreso,0)/t5.length);
+
+  const rows = t5.map(a => {
+    const al = alertClass(a.fechaEntregaObra, a.progreso);
+    const gapAl = gapAlert(a.fechaEntregaObra, a.fechaEntregaComercial);
+    const g = gapDays(a.fechaEntregaObra, a.fechaEntregaComercial);
+    const dO = a.fechaEntregaObra ? getDays(a.fechaEntregaObra) : null;
+    const rowStyle = gapAl==='gap-critico'||al==='vencido'?'background:#fff0f0':gapAl==='gap-riesgo'?'background:#fffbea':'';
+    return `<tr style="${rowStyle}">
+      <td>${a.idObra}</td><td>${a.apto}</td><td>${a.tipo}</td>
+      <td>${a.estadoVentas}</td><td>${a.estadoObra}</td>
+      <td style="font-weight:600;color:${progColor(a.progreso)}">${a.progreso}%</td>
+      ${a.acts.map(v=>`<td style="text-align:center;color:${v>=1?'#16a34a':v>0?'#ca8a04':'#dc2626'}">${v>=1?'✓':v>0?Math.round(v*100)+'%':'—'}</td>`).join('')}
+      <td>${a.fechaEntregaComercial||'—'}</td>
+      <td>${a.fechaEntregaObra||'—'}</td>
+      <td style="font-weight:600;color:${gapAl==='gap-critico'?'#dc2626':gapAl==='gap-riesgo'?'#ca8a04':'#16a34a'}">${g!==null?g+'d':'—'}</td>
+      <td style="color:${al==='vencido'?'#dc2626':al==='riesgo'?'#ea580c':'#16a34a'}">${dO!==null?(dO<0?Math.abs(dO)+'d venc':dO+'d'):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Torre 5</title>
+    <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:10px;color:#1e293b;padding:18px}
+    h1{font-size:16px;color:#ea580c;margin-bottom:2px}
+    .sub{font-size:10px;color:#64748b;margin-bottom:14px}
+    .kpis{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+    .kpi{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px 12px}
+    .kpi-l{font-size:9px;color:#64748b}.kpi-v{font-size:18px;font-weight:700;margin-top:1px}
+    table{width:100%;border-collapse:collapse;font-size:8.5px}
+    th{background:#1e293b;color:#fff;padding:4px 5px;text-align:left;font-size:8px}
+    td{padding:3px 5px;border-bottom:1px solid #e2e8f0}
+    @page{margin:1cm;size:A3 landscape}@media print{body{padding:0}}</style>
+  </head><body>
+    <h1>🏗 Torre 5 — Control de Apartamentos</h1>
+    <p class="sub">Generado: ${today} · ${t5.length} apartamentos · Progreso promedio: ${progAvg}%</p>
+    <div class="kpis">
+      <div class="kpi"><div class="kpi-l">Total</div><div class="kpi-v">${t5.length}</div></div>
+      <div class="kpi"><div class="kpi-l">Progreso prom.</div><div class="kpi-v" style="color:#1d4ed8">${progAvg}%</div></div>
+      <div class="kpi"><div class="kpi-l">100% completados</div><div class="kpi-v" style="color:#16a34a">${t5.filter(a=>a.progreso===100).length}</div></div>
+      <div class="kpi"><div class="kpi-l">Gap crítico</div><div class="kpi-v" style="color:#dc2626">${t5.filter(a=>gapAlert(a.fechaEntregaObra,a.fechaEntregaComercial)==='gap-critico').length}</div></div>
+      <div class="kpi"><div class="kpi-l">Vendidos</div><div class="kpi-v" style="color:#0891b2">${t5.filter(a=>a.estadoVentas==='Vendido').length}</div></div>
+    </div>
+    <table>
+      <thead><tr><th>ID</th><th>Apto</th><th>Tipo</th><th>Ventas</th><th>Obra</th><th>Prog</th>
+        ${ACTS.map(a=>`<th>${a.substring(0,3)}</th>`).join('')}
+        <th>F.Comercial</th><th>F.Obra</th><th>Gap</th><th>Días</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <script>window.onload=()=>window.print();<\/script>
+  </body></html>`);
+  w.document.close();
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────────────────
+let _optEditType=null, _optEditIdx=null;
+
+function renderConfig(){
+  renderOptList('obra', OBRA_OPTS, 'obra-opts-list', OBRA_COLORS);
+  renderOptList('ventas', VENTAS_OPTS, 'ventas-opts-list', VENTAS_COLORS);
+  renderActsList();
+}
+
+function renderOptList(type, opts, containerId, colors){
+  const el=document.getElementById(containerId);
+  if(!el)return;
+  el.innerHTML=opts.map((opt,i)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;margin-bottom:6px">
+      <span class="obra-chip ${colors[i%colors.length]}" style="min-width:160px;justify-content:center">${opt}</span>
+      <span style="font-size:.7rem;color:var(--muted);flex:1">${type==='obra'?getObraCount(opt):getVentasCount(opt)} apartamentos</span>
+      <button onclick="editOptModal('${type}',${i})" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:4px 10px;font-size:.68rem;cursor:pointer">✏ Editar</button>
+      ${opts.length>1?`<button onclick="deleteOpt('${type}',${i})" style="background:transparent;border:1px solid rgba(239,68,68,.3);color:var(--red);border-radius:5px;padding:4px 8px;font-size:.68rem;cursor:pointer">✕</button>`:''}
+    </div>`).join('');
+}
+
+function renderActsList(){
+  const el=document.getElementById('acts-opts-list');
+  if(!el)return;
+  el.innerHTML=ACTS.map((act,i)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;margin-bottom:6px">
+      <span style="font-size:.72rem;font-weight:600;color:var(--muted);min-width:30px;font-family:'DM Mono',monospace">${String(i+1).padStart(2,'0')}</span>
+      <input value="${act}" onchange="renameAct(${i},this.value)" style="background:transparent;border:1px solid transparent;color:var(--text);border-radius:4px;padding:3px 8px;font-size:.78rem;font-family:'Syne',sans-serif;flex:1;outline:none" onmouseover="this.style.borderColor='var(--border)'" onmouseout="this.style.borderColor='transparent'" onfocus="this.style.borderColor='var(--accent)'">
+      <span style="font-size:.68rem;color:var(--muted)">${getActAvg(i)}% prom.</span>
+    </div>`).join('');
+}
+
+function getObraCount(val){return apartments.filter(a=>a.estadoObra===val).length;}
+function getVentasCount(val){return apartments.filter(a=>a.estadoVentas===val).length;}
+function getActAvg(i){return Math.round(apartments.reduce((s,a)=>s+a.acts[i],0)/apartments.length*100);}
+
+function addOptModal(type){
+  _optEditType=type; _optEditIdx=null;
+  document.getElementById('optModalTitle').textContent='Agregar opción de '+(type==='obra'?'Estado Obra':'Estado Ventas');
+  document.getElementById('optInput').value='';
+  document.getElementById('optModal').classList.add('open');
+  setTimeout(()=>document.getElementById('optInput').focus(),100);
+}
+
+function editOptModal(type,idx){
+  _optEditType=type; _optEditIdx=idx;
+  const opts=type==='obra'?OBRA_OPTS:VENTAS_OPTS;
+  document.getElementById('optModalTitle').textContent='Editar opción';
+  document.getElementById('optInput').value=opts[idx];
+  document.getElementById('optModal').classList.add('open');
+  setTimeout(()=>document.getElementById('optInput').focus(),100);
+}
+
+function saveOpt(){
+  const val=document.getElementById('optInput').value.trim();
+  if(!val)return;
+  if(_optEditType==='obra'){
+    if(_optEditIdx===null){OBRA_OPTS.push(val);}
+    else{
+      const old=OBRA_OPTS[_optEditIdx];
+      OBRA_OPTS[_optEditIdx]=val;
+      // Update existing apartments using old value
+      apartments.forEach(a=>{if(a.estadoObra===old)a.estadoObra=val;});
+      saveData();
+    }
+    saveOpts('apt_obra_opts',OBRA_OPTS);
+  } else {
+    if(_optEditIdx===null){VENTAS_OPTS.push(val);}
+    else{
+      const old=VENTAS_OPTS[_optEditIdx];
+      VENTAS_OPTS[_optEditIdx]=val;
+      apartments.forEach(a=>{if(a.estadoVentas===old)a.estadoVentas=val;});
+      saveData();
+    }
+    saveOpts('apt_ventas_opts',VENTAS_OPTS);
+  }
+  document.getElementById('optModal').classList.remove('open');
+  renderConfig();
+  applyFilters();
+}
+
+function deleteOpt(type,idx){
+  const opts=type==='obra'?OBRA_OPTS:VENTAS_OPTS;
+  if(opts.length<=1)return;
+  const val=opts[idx];
+  const count=type==='obra'?getObraCount(val):getVentasCount(val);
+  if(count>0&&!confirm(`"${val}" está en uso por ${count} apartamentos. Si lo eliminas, esos apartamentos quedarán con la primera opción disponible. ¿Continuar?`))return;
+  if(count>0){
+    const fallback=opts[idx===0?1:0];
+    apartments.forEach(a=>{
+      if(type==='obra'&&a.estadoObra===val)a.estadoObra=fallback;
+      if(type==='ventas'&&a.estadoVentas===val)a.estadoVentas=fallback;
+    });
+    saveData();
+  }
+  opts.splice(idx,1);
+  saveOpts(type==='obra'?'apt_obra_opts':'apt_ventas_opts',opts);
+  renderConfig();
+  applyFilters();
+}
+
+function renameAct(idx,val){
+  if(!val.trim())return;
+  ACTS[idx]=val.trim();
+  try{localStorage.setItem('apt_acts',JSON.stringify(ACTS));}catch(e){}
+  // Re-render headers
+  applyFilters();
+}
+
+
+// ── AUTO-APPLIED UPDATE: Torre 5 · 08-06-2026 ────────────────────────
+function applyT5Update0806() {
+  const T5_UPDATE = {};
+  T5_UPDATE[101] = [1.0,1.0,1.0,0.0,1.0,0.25,0.25,0.5,0.0,0.0,0.0];
+  T5_UPDATE[102] = [0.25,0.0,0.0,0.0,1.0,0.25,0.25,0.0,0.0,0.0,0.0];
+  T5_UPDATE[103] = [1.0,1.0,1.0,0.25,0.5,0.5,0.75,0.5,0.0,0.0,0.0];
+  T5_UPDATE[104] = [1.0,1.0,1.0,0.25,1.0,0.25,0.25,0.5,0.0,0.0,0.0];
+  T5_UPDATE[105] = [1.0,1.0,1.0,0.0,0.75,0.25,0.25,0.5,0.0,0.0,0.0];
+  T5_UPDATE[106] = [1.0,1.0,1.0,0.0,0.5,0.25,0.25,0.25,0.0,0.0,0.0];
+  T5_UPDATE[201] = [1.0,0.0,0.0,0.0,0.5,0.0,0.0,0.0,0.0,0.0,1.0];
+  T5_UPDATE[202] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,0.0];
+  T5_UPDATE[203] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,0.0];
+  T5_UPDATE[204] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.25,0.0];
+  T5_UPDATE[205] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,1.0];
+  T5_UPDATE[206] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,1.0];
+  T5_UPDATE[207] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,1.0];
+  T5_UPDATE[208] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,1.0];
+  T5_UPDATE[209] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[210] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.25,0.5];
+  T5_UPDATE[211] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[212] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.25,0.5];
+  T5_UPDATE[213] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[301] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.25,1.0];
+  T5_UPDATE[302] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.25,1.0];
+  T5_UPDATE[303] = [1.0,1.0,0.75,0.75,0.75,0.0,0.0,0.5,0.0,0.25,1.0];
+  T5_UPDATE[304] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.25,1.0];
+  T5_UPDATE[305] = [1.0,1.0,0.75,0.75,0.75,0.0,0.0,0.5,0.0,0.25,1.0];
+  T5_UPDATE[306] = [1.0,1.0,0.75,0.75,0.75,0.0,0.0,0.5,0.0,0.25,1.0];
+  T5_UPDATE[307] = [1.0,1.0,0.75,0.75,0.75,0.0,0.0,0.5,0.0,0.0,1.0];
+  T5_UPDATE[308] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.0,0.0,0.0,0.5];
+  T5_UPDATE[309] = [0.0,0.0,0.0,0.0,0.5,0.0,0.0,0.0,0.0,0.0,0.5];
+  T5_UPDATE[310] = [1.0,1.0,1.0,1.0,1.0,0.75,1.0,0.5,0.0,0.5,1.0];
+  T5_UPDATE[311] = [1.0,1.0,1.0,0.75,1.0,0.0,0.0,0.5,0.0,0.25,0.5];
+  T5_UPDATE[312] = [1.0,1.0,1.0,0.75,0.5,0.0,0.0,0.5,0.0,0.25,0.5];
+  T5_UPDATE[401] = [1.0,1.0,0.75,0.75,0.75,0.0,0.0,0.5,0.0,0.0,1.0];
+  T5_UPDATE[402] = [1.0,1.0,0.75,0.75,0.5,0.0,0.0,0.5,0.0,0.0,1.0];
+  T5_UPDATE[403] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,1.0];
+  T5_UPDATE[404] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,1.0];
+  T5_UPDATE[405] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,1.0];
+  T5_UPDATE[406] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,1.0];
+  T5_UPDATE[407] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,1.0];
+  T5_UPDATE[408] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,1.0];
+  T5_UPDATE[409] = [1.0,1.0,0.75,0.75,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[410] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[411] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[412] = [1.0,1.0,1.0,0.0,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[413] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[501] = [1.0,1.0,1.0,0.75,0.5,0.0,0.0,0.5,0.0,0.0,1.0];
+  T5_UPDATE[502] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,1.0];
+  T5_UPDATE[503] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,1.0];
+  T5_UPDATE[504] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,1.0];
+  T5_UPDATE[505] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,1.0];
+  T5_UPDATE[506] = [1.0,1.0,0.75,0.75,0.75,0.0,0.0,0.5,0.0,0.0,1.0];
+  T5_UPDATE[507] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[508] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[509] = [1.0,1.0,0.75,0.75,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[510] = [1.0,1.0,0.75,0.75,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[511] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[512] = [1.0,1.0,0.75,0.75,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[513] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[601] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.0,0.0,0.0,0.5];
+  T5_UPDATE[602] = [1.0,1.0,1.0,0.75,1.0,0.0,0.0,0.0,0.0,0.0,0.5];
+  T5_UPDATE[603] = [1.0,1.0,1.0,0.75,1.0,0.0,0.0,0.0,0.0,0.0,0.5];
+  T5_UPDATE[604] = [1.0,1.0,1.0,0.75,0.75,0.0,0.0,0.0,0.0,0.0,0.5];
+  T5_UPDATE[605] = [1.0,1.0,1.0,0.0,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[606] = [1.0,1.0,1.0,0.0,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[607] = [1.0,1.0,1.0,0.0,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[608] = [1.0,1.0,1.0,0.0,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[609] = [1.0,1.0,0.75,0.0,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[610] = [1.0,1.0,1.0,0.0,0.75,0.0,0.0,0.5,0.0,0.0,0.5];
+  T5_UPDATE[611] = [1.0,1.0,1.0,0.0,0.75,0.0,0.0,0.0,0.0,0.0,0.5];
+  T5_UPDATE[612] = [0.75,1.0,0.0,0.0,0.75,0.0,0.0,0.0,0.0,0.0,0.5];
+  T5_UPDATE[613] = [1.0,1.0,0.0,0.0,0.75,0.0,0.0,0.0,0.0,0.0,0.5];
+  T5_UPDATE[701] = [0.0,1.0,0.0,0.0,0.75,0.0,0.0,0.0,0.0,0.0,0.5];
+  T5_UPDATE[702] = [0.0,1.0,0.0,0.0,0.75,0.0,0.0,0.0,0.0,0.0,0.5];
+  T5_UPDATE[703] = [0.0,1.0,0.0,0.0,0.75,0.0,0.0,0.0,0.0,0.0,0.5];
+  T5_UPDATE[704] = [0.0,1.0,0.0,0.0,0.75,0.0,0.0,0.0,0.0,0.0,0.5];
+  T5_UPDATE[705] = [0.0,1.0,0.0,0.0,0.75,0.0,0.0,0.0,0.0,0.0,0.5];
+  T5_UPDATE[706] = [0.0,1.0,0.0,0.0,0.75,0.0,0.0,0.0,0.0,0.0,0.5];
+  T5_UPDATE[707] = [0.0,1.0,0.0,0.0,0.75,0.0,0.0,0.0,0.0,0.0,0.5];
+  T5_UPDATE[708] = [0.0,1.0,0.0,0.0,0.75,0.0,0.0,0.0,0.0,0.0,0.5];
+  T5_UPDATE[709] = [0.0,1.0,0.0,0.0,0.75,0.0,0.0,0.0,0.0,0.0,0.5];
+  T5_UPDATE[710] = [0.0,1.0,0.0,0.0,0.75,0.0,0.0,0.0,0.0,0.0,0.5];
+
+  let updated = 0;
+  apartments.forEach(a => {
+    if (a.torre !== 5) return;
+    const newActs = T5_UPDATE[a.apto];
+    if (!newActs) return;
+    // Update 11 acts from Excel; preserve index 11 (Limpieza)
+    const limpieza = a.acts[11];
+    a.acts = [...newActs, limpieza];
+    a.progreso = calcProg(a.acts);
+    updated++;
+  });
+  saveData();
+  console.log('[T5 Update] Applied 08-06-2026 to', updated, 'apartments');
+  return updated;
+}
+// ─────────────────────────────────────────────────────────────────────
+// BACKUP / RESTORE
+// ─────────────────────────────────────────────────────────────────────
+function exportBackup(){
+  const ALL_KEYS=[
+    'apt_data_v2','apt_snaps','apt_fechas',
+    'apt_obra_opts','apt_ventas_opts','apt_acts',
+    't5_update_0806_applied','t5_update_1506_applied'
+  ];
+  const backup={
+    version:2,
+    exported:new Date().toISOString(),
+    data:{}
+  };
+  ALL_KEYS.forEach(k=>{
+    const v=localStorage.getItem(k);
+    if(v) backup.data[k]=v;
+  });
+  backup.summary={
+    apartamentos:apartments.length,
+    conFecha:apartments.filter(a=>a.fechaEntregaObra||a.fechaEntregaComercial).length,
+    snapshots:loadSnapshots().length,
+    obraOpts:OBRA_OPTS.length,
+    ventasOpts:VENTAS_OPTS.length
+  };
+  const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  const d=new Date().toISOString().slice(0,10);
+  a.download=`control_apartamentos_backup_${d}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  // Update info labels
+  const info=`${backup.summary.apartamentos} aptos · ${backup.summary.snapshots} snapshots · ${backup.summary.conFecha} con fecha`;
+  const el=document.getElementById('backup-info');
+  if(el) el.textContent='✅ Exportado: '+info;
+}
+
+function importBackup(event){
+  const file=event.target.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const backup=JSON.parse(e.target.result);
+      if(!backup.data||!backup.version){
+        alert('El archivo no es un backup válido de Control de Apartamentos.');
+        return;
+      }
+      // Confirm
+      const snaps=backup.summary?.snapshots||'?';
+      const apts=backup.summary?.apartamentos||'?';
+      const fecha=backup.exported?new Date(backup.exported).toLocaleDateString('es-GT'):'?';
+      if(!confirm(`¿Restaurar backup del ${fecha}?\n\n• ${apts} apartamentos\n• ${snaps} snapshots\n\nEsto reemplazará todos tus datos actuales.`)) return;
+      // Apply all keys
+      Object.entries(backup.data).forEach(([k,v])=>localStorage.setItem(k,v));
+      // Reload
+      const info=document.getElementById('restore-info');
+      if(info) info.innerHTML='<span style="color:var(--green)">✅ Datos restaurados correctamente. Recargando...</span>';
+      setTimeout(()=>location.reload(),1200);
+    }catch(err){
+      alert('Error al leer el archivo: '+err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────────────
+loadData();
+// Apply T5 update 08-06-2026 ONLY on a clean install (no saved data)
+// Never overwrite existing user data
+localStorage.removeItem('t5_update_1506_applied');
+if(!localStorage.getItem('apt_data_v2') && !localStorage.getItem('t5_update_0806_applied')){
+  const n = applyT5Update0806();
+  localStorage.setItem('t5_update_0806_applied','1');
+  console.log('[T5 Update] Fresh install (08-06): updated', n, 'apartments');
+} else {
+  localStorage.setItem('t5_update_0806_applied','1'); // mark as done even if skipped
+}
+// Restore saved dates from old storage if available
+try{
+  const oldDates=JSON.parse(localStorage.getItem('apt_fechas')||'{}');
+  apartments.forEach(a=>{if(oldDates[a.idObra]&&!a.fechaEntregaObra)a.fechaEntregaObra=oldDates[a.idObra];});
+  saveData();
+}catch(e){}
+updateStats();
+updateActHeaders();
+applyFilters();
+</script>
+</body>
+</html>
